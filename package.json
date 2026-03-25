@@ -1,0 +1,12 @@
+{
+  "name": "buy-wise",
+  "version": "1.0.0",
+  "description": "Buy Wise — Decision Intelligence SaaS monorepo",
+  "scripts": {
+    "client": "cd client && npm run dev",
+    "server": "cd server && node index.js",
+    "dev": "concurrently \"npm run client\" \"npm run server\""
+  },
+  "keywords": [],
+  "author": ""
+}
