@@ -1,9 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
+const { verifyToken } = require('../middleware/auth');
 
-// POST /api/feedback/submit
-router.post('/submit', async (req, res) => {
+// POST /api/feedback/submit — requires authentication
+router.post('/submit', verifyToken, async (req, res) => {
   try {
     const { orderId, rating, was_helpful, did_purchase, comments } = req.body;
     if (!orderId || !rating) return res.status(400).json({ error: 'orderId and rating required' });
@@ -20,8 +21,8 @@ router.post('/submit', async (req, res) => {
   }
 });
 
-// GET /api/feedback/order/:orderId
-router.get('/order/:orderId', async (req, res) => {
+// GET /api/feedback/order/:orderId — requires authentication
+router.get('/order/:orderId', verifyToken, async (req, res) => {
   try {
     const result = await db.query('SELECT * FROM feedback WHERE order_id = $1', [req.params.orderId]);
     res.json({ feedback: result.rows });

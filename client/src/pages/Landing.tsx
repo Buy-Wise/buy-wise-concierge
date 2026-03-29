@@ -1,23 +1,53 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { FileText, CreditCard, MessageCircle, ShieldCheck, Clock, Zap } from 'lucide-react';
+import { CheckCircle2, Zap, ShieldCheck, FileText, CreditCard, MessageCircle, Clock } from 'lucide-react';
 import ServiceTierCard from '../components/ServiceTierCard';
+import { HeroGeometric } from "@/components/ui/shape-landing-hero";
+import RadialOrbitalTimeline from "@/components/ui/radial-orbital-timeline";
+
+const timelineData = [
+  {
+    id: 1,
+    title: "Fill Requirements",
+    subtitle: "Step 1: Personalized Input",
+    content: "Tell us exactly what you need. Our AI analyzes your budget and preferences to filter out the noise.",
+    icon: FileText,
+    metricLabel: "Average completion time",
+    metricValue: "2 Minutes",
+    marketingPoint: "Save 15+ hours of confusing YouTube reviews and Reddit threads with one simple form.",
+  },
+  {
+    id: 2,
+    title: "Pay Securely",
+    subtitle: "Step 2: Instant Activation",
+    content: "One-time payment for your specific research. No subscriptions. No hidden fees. Just pure data.",
+    icon: CreditCard,
+    metricLabel: "Secure checkout",
+    metricValue: "Bank-grade Security",
+    marketingPoint: "An unbiased ₹199-349 report can prevent you from making a ₹50,000+ buying mistake.",
+  },
+  {
+    id: 3,
+    title: "Download Instantly",
+    subtitle: "Step 3: Definitive Answer",
+    content: "Receive a structured PDF report with clear pros, cons, and a verified 'Best Buy' recommendation.",
+    icon: MessageCircle,
+    metricLabel: "Clarity Score",
+    metricValue: "100% Guaranteed",
+    marketingPoint: "Join 500+ smart buyers who secured decision clarity in minutes instead of days.",
+  },
+];
 
 const Landing = () => {
   return (
     <div className="w-full">
       {/* Hero Section */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-32 pb-20 text-center">
-        <div className="inline-block border border-[#D4AF37]/30 bg-[#D4AF37]/10 text-[#D4AF37] px-4 py-1.5 rounded-full text-sm font-semibold mb-6">
-          AI-Powered Buying Intelligence
-        </div>
-        <h1 className="text-5xl md:text-7xl font-bold tracking-tighter mb-6">
-          We Research. <br className="md:hidden" />
-          <span className="text-[#D4AF37]">You Buy Smart.</span>
-        </h1>
-        <p className="text-xl text-gray-400 mb-10 max-w-2xl mx-auto leading-relaxed">
-          Get a structured, personalized buying decision report in minutes. Save 5-10 hours of confusing research and avoid wasting your money.
-        </p>
+      <HeroGeometric 
+        badge="AI-Powered Buying Intelligence"
+        title1="We Research."
+        title2="You Buy Smart."
+        subtitle="Get a structured, personalized buying decision report in minutes. Save 5-10 hours of confusing research and avoid wasting your money."
+      >
         <div className="flex flex-col sm:flex-row justify-center items-center space-y-4 sm:space-y-0 sm:space-x-6">
           <Link to="/order" className="bg-[#D4AF37] text-black w-full sm:w-auto px-8 py-4 rounded-lg font-bold text-lg hover:bg-[#b8972e] hover:scale-105 transition-all shadow-[0_0_20px_rgba(212,175,55,0.3)]">
             Get Your Research Report
@@ -26,41 +56,18 @@ const Landing = () => {
             See Sample Report
           </Link>
         </div>
-      </section>
+      </HeroGeometric>
 
       {/* How it Works Section */}
-      <section className="bg-[#0a0a0a] border-y border-white/5 py-24">
+      <section className="bg-black border-y border-white/5 py-24 overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
+          <div className="text-center mb-16 relative z-20">
             <h2 className="text-3xl md:text-5xl font-bold mb-4">How It Works</h2>
-            <p className="text-gray-400">Three simple steps to clarity.</p>
+            <p className="text-gray-400">Three simple steps to buying clarity.</p>
           </div>
-          <div className="grid md:grid-cols-3 gap-12 relative">
-            <div className="hidden md:block absolute top-12 left-1/6 right-1/6 h-0.5 bg-gradient-to-r from-transparent via-[#D4AF37]/30 to-transparent z-0"></div>
-            
-            <div className="relative z-10 flex flex-col items-center text-center">
-              <div className="w-24 h-24 bg-black border-2 border-[#D4AF37] rounded-full flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(212,175,55,0.15)]">
-                <FileText size={40} className="text-[#D4AF37]" />
-              </div>
-              <h3 className="text-xl font-bold mb-2">1. Fill Requirements</h3>
-              <p className="text-gray-400">Tell us your budget, preferences, and what you strictly want to avoid.</p>
-            </div>
-            
-            <div className="relative z-10 flex flex-col items-center text-center">
-              <div className="w-24 h-24 bg-black border-2 border-[#D4AF37] rounded-full flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(212,175,55,0.15)]">
-                <CreditCard size={40} className="text-[#D4AF37]" />
-              </div>
-              <h3 className="text-xl font-bold mb-2">2. Pay Securely</h3>
-              <p className="text-gray-400">Checkout securely with Razorpay via UPI, Net Banking or Cards.</p>
-            </div>
-            
-            <div className="relative z-10 flex flex-col items-center text-center">
-              <div className="w-24 h-24 bg-black border-2 border-[#D4AF37] rounded-full flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(212,175,55,0.15)]">
-                <MessageCircle size={40} className="text-[#D4AF37]" />
-              </div>
-              <h3 className="text-xl font-bold mb-2">3. Get PDF via WhatsApp</h3>
-              <p className="text-gray-400">Receive a structured PDF report directly on your WhatsApp in minutes.</p>
-            </div>
+          
+          <div className="relative h-[600px] -mt-20">
+             <RadialOrbitalTimeline timelineData={timelineData} />
           </div>
         </div>
       </section>
@@ -80,7 +87,7 @@ const Landing = () => {
               "2-3 Curated Options",
               "Basic Comparison Table",
               "Primary Recommendation",
-              "Delivered in 24 hours"
+              "Instant Download"
             ]}
             ctaText="Select Basic"
             ctaLink="/order?tier=basic"
@@ -94,7 +101,7 @@ const Landing = () => {
               "Detailed Pros & Cons",
               "Use-case Mapping",
               "Alternative Picks",
-              "Delivered in 24 hours"
+              "Instant Download"
             ]}
             ctaText="Get Pro Report"
             ctaLink="/order?tier=pro"
@@ -106,22 +113,21 @@ const Landing = () => {
               "Priority Processing",
               "Delivered in 2 Hours",
               "Skip the queue",
-              "Applies to any report"
+              "Delivered in 2 Hours"
             ]}
             ctaText="Add to Order"
             ctaLink="/order"
           />
           <ServiceTierCard 
             title="DEAL WATCH"
-            price="199"
-            period="/mo"
+            price="FREE"
             features={[
               "Active Price Drop Tracking",
-              "Instant WhatsApp Alerts",
+              "Instant Email Alerts",
               "Target Price Monitoring",
-              "Cancel Anytime"
+              "10 Alerts per User"
             ]}
-            ctaText="Start Tracking"
+            ctaText="Setup Alerts"
             ctaLink="/deal-watch"
           />
         </div>
@@ -185,20 +191,6 @@ const Landing = () => {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="border-t border-white/10 py-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center">
-          <div className="mb-6 md:mb-0">
-            <span className="text-2xl font-bold tracking-tighter">BUY<span className="text-[#D4AF37]">WISE</span></span>
-            <p className="text-gray-500 mt-2 text-sm">© {new Date().getFullYear()} Buy Wise India. All rights reserved.</p>
-          </div>
-          <div className="flex space-x-6 text-sm text-gray-400">
-            <Link to="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link>
-            <Link to="/terms" className="hover:text-white transition-colors">Terms of Service</Link>
-            <Link to="/contact" className="hover:text-white transition-colors">Contact</Link>
-          </div>
-        </div>
-      </footer>
     </div>
   );
 };

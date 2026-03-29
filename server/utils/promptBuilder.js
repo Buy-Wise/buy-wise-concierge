@@ -1,59 +1,66 @@
 /**
- * buildReportPrompt — Constructs the OpenAI prompt for a given order's intake form.
- * @param {object} user - User data from DB (name, language_preference)
- * @param {object} order - Order data (service_tier, product_category)
- * @param {object} form  - Intake form data
- * @returns {string} - The full prompt string
+ * buildReportPrompt — Constructs the Gemini prompt for a given order's intake form.
+ * Optimized for local Indian market data and specific language output.
  */
 const buildReportPrompt = (user, order, form) => {
-  const optionCount = order.service_tier === 'PRO' ? '4–6' : '2–3';
-  const lang = user.language_preference === 'HI' ? 'Hindi' : user.language_preference === 'TA' ? 'Tamil' : 'English';
+  const optionCount = order.service_tier === 'PRO' ? '5–7' : '3';
+  const langCode = user.language_preference || 'EN';
+  const langName = langCode === 'HI' ? 'Hindi' : langCode === 'TA' ? 'Tamil' : 'English';
 
-  return `You are a professional product research analyst specializing in the Indian market.
+  const budget = form.budget_range || (form.budget_min ? `₹${form.budget_min} to ₹${form.budget_max}` : 'Not specified');
+  const primaryUse = form.primary_use || form.primary_use_case || 'General use';
+  const mustHave = form.must_have_features || form.preferences || 'Not specified';
+  const priorities = form.priority_factors || form.deal_breakers || 'Not specified';
+  const notes = form.additional_notes || 'None';
 
-User Profile:
-- Name: ${user.name}
-- Language: ${lang}
-- Budget: ₹${form.budget_min} to ₹${form.budget_max}
-- Product type: ${order.product_category}
-- Primary use case: ${form.primary_use_case}
-- Priority factors: ${form.priority_factors}
-- Must-have features: ${form.preferences}
-- Additional context: ${form.additional_notes || 'None'}
+  return `SYSTEM INSTRUCTION: You are a elite Product Research Specialist for "Buy Wise".
+Your goal is to provide a comprehensive, data-driven research report for a customer in India.
+LANGUAGE: You MUST write the ENTIRE report in ${langName}. If technical terms don't have a direct translation, use the English term written in ${langName} script (transliteration).
 
-TASK:
-1. Identify the top ${optionCount} products available in India within budget.
-2. For each product provide:
-   - Exact model name and current market price in INR
-   - Key specifications relevant to use case
-   - Pros (minimum 3, specific to their needs)
-   - Cons (minimum 2, honest)
-   - Best for: which type of user
-3. Create a comparison table across:
-   - Price value
-   - Performance for stated use case
-   - Longevity / build quality
-   - After-sale service in India
-   - Overall score /10
-4. PRIMARY RECOMMENDATION:
-   - Single best pick with clear reasoning
-   - Why this over others for their specific needs
-5. ALTERNATIVE RECOMMENDATION:
-   - If budget is flexible: upgrade option
-   - If budget is tight: value option
-6. BUYING ADVICE:
-   - Where to buy (Amazon/Flipkart/offline)
-   - Current deals or offers if any
-   - What to check before purchasing
-   - Any hidden costs to be aware of
+USER PROFILE:
+- Customer Name: ${user.name}
+- Language: ${langName}
+- Budget: ${budget}
+- Product Category: ${order.product_category}
+- Use Case: ${primaryUse}
+- Must-Haves: ${mustHave}
+- Deal Breakers: ${priorities}
+- Context: ${notes}
 
-CONSTRAINTS:
-- No generic suggestions
-- Only products available in India right now
-- Realistic current prices (not outdated)
-- Balanced honest analysis
-- Output in ${lang} language
-- Format as structured report with clear sections and markdown headings`;
+REPORT STRUCTURE (Strictly follow this):
+
+# ${langName === 'Tamil' ? 'சிறந்த தயாரிப்பு ஆராய்ச்சி அறிக்கை' : langName === 'Hindi' ? 'स्मार्ट खरीद अनुसंधान रिपोर्ट' : 'Smart Buy Research Report'}: ${order.product_category}
+
+## 1. Executive Summary
+- Brief overview of the market for ${order.product_category} in India within ${budget}.
+- Top 3 things to look for in this category.
+
+## 2. Top ${optionCount} Recommendations
+For each product, provide:
+- **[Model Name]** (Price: ₹[Current Price])
+- **Why this fits you:** (Directly link to their use case: ${primaryUse})
+- **Pros:** (Detailed, specific to India/Warranty/Service)
+- **Cons:** (Be honest about drawbacks)
+- **Best for:** (e.g., Professionals, Students, Home use)
+
+## 3. Comparison Matrix
+- Create a markdown table comparing the top 3 options on: Price, Performance, Battery/Durability, and After-Sales Support in India.
+
+## 4. Buying Guide & Best Deals
+- Where to buy (Amazon.in, Flipkart, Reliance Digital, or Croma).
+- Current bank offers or card discounts to look for.
+- "Buyer Beware": Specific things to check at the time of delivery.
+
+## 5. Final Expert Verdict
+- The absolute #1 choice for ${user.name} based on ${mustHave}.
+- Closing advice.
+
+STRICT CONSTRAINTS:
+- No generic advice. Reference real products available on Amazon.in/Flipkart right now.
+- Current 2024/2025 pricing only.
+- Formatting: Use Markdown headers, bold text, and bullet points.
+- TONE: Professional, helpful, and premium.
+- OUTPUT LANGUAGE: ${langName} ONLY.`;
 };
 
 module.exports = { buildReportPrompt };

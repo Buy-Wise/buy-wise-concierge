@@ -1,25 +1,32 @@
 require('dotenv').config({ path: '../.env' }); // or use default .env in server folder
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
-  credentials: true
+app.use(cors({ 
+  origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+  credentials: true 
 }));
 app.use(express.json());
+const cookieParser = require('cookie-parser');
+app.use(cookieParser());
+
+// Serve static PDFs
+app.use('/pdfs', express.static(path.join(__dirname, 'pdfs')));
 
 // Routes imports
 const authRoutes = require('./routes/auth');
 const orderRoutes = require('./routes/orders');
 // const formRoutes = require('./routes/forms');
 const paymentRoutes = require('./routes/payments');
-const reportRoutes = require('./routes/reports');
+const reportRoutes = require('./routes/reports').router;
 const feedbackRoutes = require('./routes/feedback');
 const adminRoutes = require('./routes/admin');
 const alertRoutes = require('./routes/alerts');
+const eventRoutes = require('./routes/events');
 
 // Basic API check
 app.get('/api/health', (req, res) => {
@@ -35,6 +42,7 @@ app.use('/api/reports', reportRoutes);
 app.use('/api/feedback', feedbackRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/alerts', alertRoutes);
+app.use('/api/events', eventRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);

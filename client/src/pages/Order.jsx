@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Loader2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 const formatCurrency = (val) => '₹' + Number(val).toLocaleString('en-IN');
 
@@ -9,6 +10,106 @@ const Order = () => {
   const [category, setCategory] = useState('PHONE');
   const [budgetMin, setBudgetMin] = useState(10000);
   const [budgetMax, setBudgetMax] = useState(50000);
+  const [name, setName] = useState('');
+  const [lang, setLang] = useState('EN');
+  const [useCases, setUseCases] = useState([]);
+  const [avoid, setAvoid] = useState('');
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [error, setError] = useState('');
+  const navigate = useNavigate();
+
+  const loadRazorpayScript = () => {
+    return new Promise((resolve) => {
+      const script = document.createElement('script');
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+  };
+
+  const handlePayment = async () => {
+    setIsProcessingPayment(true);
+    setError('');
+
+    try {
+      const resLoad = await loadRazorpayScript();
+      if (!resLoad) throw new Error('Razorpay SDK failed to load. Are you online?');
+
+      const amount = tier === 'PRO' ? 34900 : 19900; 
+      
+      const createRes = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/payments/create-order`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token') || ''}` },
+        body: JSON.stringify({ 
+          amount, 
+          service_tier: tier, 
+          product_category: category, 
+          formData: { 
+            budget_min: budgetMin, 
+            budget_max: budgetMax, 
+            primary_use_case: useCases.join(', ') || 'General', 
+            preferences: `Language: ${lang}`, 
+            priority_factors: useCases.join(', '), 
+            additional_notes: avoid 
+          } 
+        })
+      });
+      const orderData = await createRes.json();
+      if (!createRes.ok) throw new Error(orderData.error || 'Failed to create order');
+
+      const options = {
+        key: import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_live_SW7gBxaTcsU5xL',
+        amount: orderData.order.amount,
+        currency: orderData.order.currency,
+        name: "Buy Wise",
+        description: `${tier} Research Report`,
+        order_id: orderData.order.id,
+        handler: async function (response) {
+          try {
+            const verifyRes = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/payments/verify-payment`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token') || ''}` },
+              body: JSON.stringify({ 
+                razorpay_order_id: response.razorpay_order_id, 
+                razorpay_payment_id: response.razorpay_payment_id, 
+                razorpay_signature: response.razorpay_signature, 
+                dbOrderId: orderData.dbOrderId 
+              })
+            });
+            if (!verifyRes.ok) {
+              const errText = await verifyRes.text();
+              console.error('Verification API error:', errText);
+              throw new Error(`Server returned ${verifyRes.status}: ${errText.substring(0, 100)}`);
+            }
+            const verifyData = await verifyRes.json();
+            
+            if (verifyData.success) {
+              navigate(`/order/processing?orderId=${orderData.dbOrderId}`);
+            } else {
+              setError(verifyData.error || 'Payment verification failed');
+            }
+          } catch (e) {
+            setError('Payment verification failed. Please contact support.');
+          }
+        },
+        prefill: {
+          name: localStorage.getItem('user_name') || '',
+          email: localStorage.getItem('user_email') || ''
+        },
+        theme: { color: "#D4AF37" }
+      };
+
+      const paymentObject = new window.Razorpay(options);
+      paymentObject.open();
+
+    } catch (err) {
+      console.error(err);
+      setError(err.message || 'Payment initiation failed. Please ensure you are logged in.');
+    } finally {
+      setIsProcessingPayment(false);
+    }
+  };
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-32 min-h-[80vh]">
@@ -70,18 +171,11 @@ const Order = () => {
               <div className="grid md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-sm text-gray-400 mb-1">Full Name</label>
-                  <input required type="text" className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg p-3 text-white focus:border-[#D4AF37] focus:outline-none" placeholder="Rahul S" />
+                  <input required type="text" value={name} onChange={e => setName(e.target.value)} className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg p-3 text-white focus:border-[#D4AF37] focus:outline-none" placeholder="Rahul S" />
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-400 mb-1">WhatsApp Number</label>
-                  <div className="flex">
-                    <span className="bg-[#1a1a1a] border border-r-0 border-white/10 rounded-l-lg p-3 text-gray-400">+91</span>
-                    <input required type="tel" className="w-full bg-[#0a0a0a] border border-white/10 rounded-r-lg p-3 text-white focus:border-[#D4AF37] focus:outline-none" placeholder="9876543210" />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm text-gray-400 mb-1">Language Preference</label>
-                  <select className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg p-3 text-white focus:border-[#D4AF37] focus:outline-none">
+                   <label className="block text-sm text-gray-400 mb-1">Language Preference</label>
+                  <select value={lang} onChange={e => setLang(e.target.value)} className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg p-3 text-white focus:border-[#D4AF37] focus:outline-none">
                     <option value="EN">English</option>
                     <option value="HI">Hindi</option>
                     <option value="TA">Tamil</option>
@@ -130,7 +224,12 @@ const Order = () => {
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     {['Gaming', 'Programming', 'Office Work', 'Social Media', 'Photography', 'Battery Life'].map(use => (
                       <label key={use} className="flex items-center space-x-2 bg-black px-3 py-2 rounded-md border border-white/5 cursor-pointer hover:border-white/20">
-                        <input type="checkbox" className="accent-[#D4AF37]" />
+                        <input type="checkbox" checked={useCases.includes(use)} 
+                          onChange={e => {
+                            if(e.target.checked) setUseCases([...useCases, use]);
+                            else setUseCases(useCases.filter(u => u !== use));
+                          }}
+                          className="accent-[#D4AF37]" />
                         <span className="text-sm">{use}</span>
                       </label>
                     ))}
@@ -139,7 +238,7 @@ const Order = () => {
 
                 <div>
                   <label className="block text-sm text-gray-400 mb-1">Anything specifically to AVOID?</label>
-                  <textarea rows="2" className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg p-3 text-white focus:border-[#D4AF37] focus:outline-none" placeholder="E.g. No Exynos processors, don't want a heavy laptop..."></textarea>
+                  <textarea rows="2" value={avoid} onChange={e => setAvoid(e.target.value)} className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg p-3 text-white focus:border-[#D4AF37] focus:outline-none" placeholder="E.g. No Exynos processors, don't want a heavy laptop..."></textarea>
                 </div>
               </div>
             </div>
@@ -173,9 +272,10 @@ const Order = () => {
               <span>Total</span>
               <span className="text-[#D4AF37]">₹{tier === 'PRO' ? '349' : '199'}</span>
             </div>
-            <button className="w-full mt-8 bg-[#D4AF37] text-black px-8 py-4 rounded-lg font-bold text-lg hover:bg-[#b8972e] flex justify-center items-center shadow-[0_0_15px_rgba(212,175,55,0.4)]">
-              Pay Securely with Razorpay
+            <button onClick={handlePayment} disabled={isProcessingPayment} className="w-full mt-8 bg-[#D4AF37] text-black px-8 py-4 rounded-lg font-bold text-lg hover:bg-[#b8972e] flex justify-center items-center shadow-[0_0_15px_rgba(212,175,55,0.4)] disabled:opacity-50">
+              {isProcessingPayment ? <><Loader2 className="w-5 h-5 animate-spin mr-2" /> Processing...</> : 'Pay Securely with Razorpay'}
             </button>
+            {error && <p className="text-red-500 text-sm mt-4 text-center">{error}</p>}
             <div className="mt-6 flex flex-col items-center">
               <p className="text-xs text-gray-500 mb-2 border-t border-white/5 pt-4 w-full text-center">Secured by Razorpay. UPI, Cards & NetBanking accepted.</p>
             </div>

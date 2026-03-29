@@ -17,10 +17,13 @@ CREATE TABLE orders (
   user_id UUID REFERENCES users(id) ON DELETE CASCADE,
   service_tier VARCHAR(20) CHECK (service_tier IN ('BASIC', 'PRO', 'EXPRESS', 'DEAL_WATCH')) NOT NULL,
   product_category VARCHAR(20) CHECK (product_category IN ('PHONE', 'LAPTOP', 'OTHER')) NOT NULL,
-  status VARCHAR(20) CHECK (status IN ('PENDING', 'PAID', 'IN_PROGRESS', 'DELIVERED', 'CANCELLED')) DEFAULT 'PENDING',
+  status VARCHAR(20) CHECK (status IN ('PENDING', 'PAID', 'GENERATING', 'DELIVERED', 'GENERATION_FAILED', 'CANCELLED')) DEFAULT 'PENDING',
   amount INTEGER NOT NULL, -- stored in paise
   razorpay_order_id VARCHAR(255),
   razorpay_payment_id VARCHAR(255),
+  auto_generated BOOLEAN DEFAULT FALSE,
+  generation_started_at TIMESTAMP,
+  generation_completed_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   delivered_at TIMESTAMP
 );
@@ -44,9 +47,11 @@ CREATE TABLE reports (
   raw_ai_output TEXT,
   formatted_report TEXT,
   pdf_url VARCHAR(255),
+  download_count INTEGER DEFAULT 0,
+  download_token VARCHAR UNIQUE,
+  is_available BOOLEAN DEFAULT FALSE,
   generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  delivered_at TIMESTAMP,
-  delivery_method VARCHAR(20) CHECK (delivery_method IN ('WHATSAPP', 'EMAIL', 'BOTH'))
+  delivered_at TIMESTAMP
 );
 
 CREATE TABLE feedback (

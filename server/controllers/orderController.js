@@ -24,9 +24,8 @@ exports.getUserOrders = async (req, res) => {
       return res.status(403).json({ error: 'Forbidden' });
     }
 
-    // Join with reports to get PDF URL if exists
     const result = await db.query(`
-      SELECT o.*, r.pdf_url 
+      SELECT o.*, r.pdf_url, r.is_available 
       FROM orders o 
       LEFT JOIN reports r ON o.id = r.order_id 
       WHERE o.user_id = $1 
@@ -36,6 +35,22 @@ exports.getUserOrders = async (req, res) => {
     res.json({ orders: result.rows });
   } catch (error) {
     res.status(500).json({ error: 'Server error retrieving user orders' });
+  }
+};
+
+exports.getMyOrders = async (req, res) => {
+  try {
+    const result = await db.query(`
+      SELECT o.*, r.pdf_url, r.is_available 
+      FROM orders o 
+      LEFT JOIN reports r ON o.id = r.order_id 
+      WHERE o.user_id = $1 
+      ORDER BY o.created_at DESC
+    `, [req.user.id]);
+    
+    res.json({ orders: result.rows });
+  } catch (error) {
+    res.status(500).json({ error: 'Server error retrieving your orders' });
   }
 };
 

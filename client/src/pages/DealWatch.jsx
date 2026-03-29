@@ -24,7 +24,7 @@ const DealWatch = () => {
       <div className="flex justify-between items-center mb-10">
         <div>
           <h1 className="text-4xl font-bold mb-2">Deal Watch</h1>
-          <p className="text-gray-400">Get WhatsApp alerts when your product drops to target price.</p>
+          <p className="text-gray-400">Get Email alerts when your product drops to target price.</p>
         </div>
         <button onClick={() => setAdding(!adding)} className="flex items-center bg-[#D4AF37] text-black px-5 py-2.5 rounded-lg font-bold hover:bg-[#b8972e]">
           <Plus size={18} className="mr-2" /> Add Alert
