@@ -31,7 +31,7 @@ Track your order: ${process.env.FRONTEND_URL}/dashboard
 
 — Buy Wise Team`,
   };
-  return transporter.sendMail(mailOptions);
+  try { return await transporter.sendMail(mailOptions); } catch(e) { console.log('Email silenced:', e.message); return null; }
 };
 
 const sendReportReadyEmail = async (order, user) => {
@@ -55,7 +55,7 @@ Questions? Reply to this email or WhatsApp us: ${process.env.ADMIN_WHATSAPP_NUMB
 
 — Buy Wise Team`,
   };
-  return transporter.sendMail(mailOptions);
+  try { return await transporter.sendMail(mailOptions); } catch(e) { console.log('Email silenced:', e.message); return null; }
 };
 
 const sendGenerationFailedEmail = async (order, user) => {
@@ -85,8 +85,10 @@ We apologize for the inconvenience.
     text: `Generation failed for order ${order.id}. User: ${user.email}. Please login to admin and retry or refund.`
   };
   
-  await transporter.sendMail(userMailOptions);
-  return transporter.sendMail(adminMailOptions);
+  try {
+    await transporter.sendMail(userMailOptions);
+    return await transporter.sendMail(adminMailOptions);
+  } catch(e) { console.log('Email silenced:', e.message); return null; }
 };
 
 const sendAdminNewOrderEmail = async (order, user) => {
@@ -103,7 +105,7 @@ Category: ${order.product_category}
 
 View in dashboard: ${process.env.FRONTEND_URL}/admin`,
   };
-  return transporter.sendMail(mailOptions);
+  try { return await transporter.sendMail(mailOptions); } catch(e) { console.log('Email silenced:', e.message); return null; }
 };
 
 module.exports = {

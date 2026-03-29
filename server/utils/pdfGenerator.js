@@ -25,14 +25,24 @@ const generatePDF = async (report) => {
     const puppeteer = require('puppeteer');
     const browser = await puppeteer.launch({ 
       headless: 'new', 
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--font-render-hinting=none', '--disable-font-subpixel-positioning'] 
+      args: [
+        '--no-sandbox', 
+        '--disable-setuid-sandbox', 
+        '--font-render-hinting=none', 
+        '--disable-font-subpixel-positioning',
+        '--disable-dev-shm-usage',
+        '--disable-gpu'
+      ] 
     });
     const page = await browser.newPage();
 
     const htmlContent = buildReportHTML(report);
     
     // Set content and wait for fonts and resources
-    await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+    await page.setContent(htmlContent, { 
+      waitUntil: 'networkidle0',
+      timeout: 60000
+    });
     
     // Ensure fonts are loaded before printing
     await page.evaluateHandle('document.fonts.ready');
