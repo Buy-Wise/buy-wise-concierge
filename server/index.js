@@ -6,9 +6,20 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(cors({ 
-  origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
-  credentials: true 
+app.use(cors({
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl)
+    if (!origin) return callback(null, true);
+
+    // Allow localhost AND any Vercel domain for your frontend
+    if (origin.startsWith('http://localhost') || origin.endsWith('vercel.app')) {
+      return callback(null, true);
+    }
+
+    // Block anything else
+    return callback(new Error('Not allowed by CORS'), false);
+  },
+  credentials: true
 }));
 app.use(express.json());
 const cookieParser = require('cookie-parser');
