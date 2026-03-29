@@ -8,6 +8,9 @@ const Dashboard = () => {
     const [user, setUser] = useState({ name: 'Rahul S.', email: 'rahul@example.com', language_preference: 'EN', initial: 'RS', alertsCount: 0 });
   const [profileForm, setProfileForm] = useState({ name: 'Rahul S.', language_preference: 'EN', password: '', confirmPassword: '' });
   const [timers, setTimers] = useState({}); // orderId -> seconds remaining
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [viewingPdf, setViewingPdf] = useState(null); // URL of PDF to view in modal
 
   const syncPayment = async (orderId) => {
     try {
