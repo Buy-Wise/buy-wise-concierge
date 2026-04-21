@@ -39,7 +39,7 @@ exports.register = async (req, res) => {
     const token = generateToken(user);
     setTokenCookie(res, token);
 
-    res.status(201).json({ user, token }); // Keeping token in JSON optionally for clients that need it, but it's now in cookie too
+    res.status(201).json({ user, token, isNewUser: true });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Server error during registration' });
@@ -78,7 +78,14 @@ exports.login = async (req, res) => {
 exports.googleLogin = async (req, res) => {
   try {
     const { token } = req.body;
-    const ticket = await client.verifyIdToken({
+    console.log("=== ENTERING GOOGLE LOGIN ===");
+    console.log("Environment Client ID:", process.env.GOOGLE_CLIENT_ID);
+    console.log("Received Token (first 20 chars):", token ? token.substring(0,20) : "UNDEFINED");
+    
+    // Dynamically creating client to absolutely guarantee fresh .env values
+    const dynamicClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+    
+    const ticket = await dynamicClient.verifyIdToken({
       idToken: token,
       audience: process.env.GOOGLE_CLIENT_ID
     });
@@ -87,6 +94,7 @@ exports.googleLogin = async (req, res) => {
 
     let result = await db.query('SELECT * FROM users WHERE email = $1', [email]);
     let user = result.rows[0];
+    let isNewUser = false;
 
     if (!user) {
       const insertResult = await db.query(
@@ -94,6 +102,7 @@ exports.googleLogin = async (req, res) => {
         [name, email]
       );
       user = insertResult.rows[0];
+      isNewUser = true;
     }
 
     const jwtToken = generateToken(user);
@@ -101,11 +110,24 @@ exports.googleLogin = async (req, res) => {
 
     res.json({
       user: { id: user.id, name: user.name, email: user.email, role: user.role },
-      token: jwtToken
+      token: jwtToken,
+      isNewUser
     });
   } catch (error) {
-    console.error(error);
-    res.status(401).json({ error: 'Invalid Google token' });
+    console.error("[GOOGLE AUTH ERROR] Failed to verify IdToken:");
+    console.error("Error Message ->", error.message);
+    
+    let userFriendlyError = 'Invalid Google token. Please try again.';
+    
+    if (error.message.includes("audience") || error.message.includes("Wrong recipient")) {
+      console.error(">>> AUDIENCE MISMATCH: Your server's GOOGLE_CLIENT_ID in .env does not match the token's audience!");
+      userFriendlyError = 'Server configuration error. (Audience Mismatch)';
+    } else if (error.message.includes("expired")) {
+      console.error(">>> TOKEN EXPIRED: The Google token expired before the server could verify it.");
+      userFriendlyError = 'Login session expired. Please click the button again.';
+    }
+
+    res.status(401).json({ error: userFriendlyError, details: error.message });
   }
 };
 
@@ -170,7 +192,10 @@ exports.resetPassword = async (req, res) => {
 
 exports.getMe = async (req, res) => {
   try {
-    const result = await db.query('SELECT id, name, email, phone_whatsapp, language_preference, role, created_at FROM users WHERE id = $1', [req.user.id]);
+    const result = await db.query(
+      'SELECT id, name, email, phone_whatsapp, language_preference, role, created_at, free_report_used FROM users WHERE id = $1',
+      [req.user.id]
+    );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -203,5 +228,36 @@ exports.updateProfile = async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Server error updating profile' });
+  }
+};
+
+exports.deleteAccount = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Manual cascading deletes to ensure total data removal
+    // 1. Delete reports associated with user's orders
+    await db.query('DELETE FROM reports WHERE order_id IN (SELECT id FROM orders WHERE user_id = $1)', [userId]);
+    
+    // 2. Delete intake forms associated with user's orders
+    await db.query('DELETE FROM intake_forms WHERE order_id IN (SELECT id FROM orders WHERE user_id = $1)', [userId]);
+    
+    // 3. Delete feedback from user
+    await db.query('DELETE FROM feedback WHERE user_id = $1', [userId]);
+
+    // 4. Delete orders from user
+    await db.query('DELETE FROM orders WHERE user_id = $1', [userId]);
+
+    // 5. Delete the user themselves
+    await db.query('DELETE FROM users WHERE id = $1', [userId]);
+
+    // Clear auth cookie
+    res.clearCookie('token');
+
+    console.log(`[ACCOUNT-DELETE] User ${userId} and all associated data permanently deleted.`);
+    res.json({ success: true, message: 'Account and all data permanently deleted.' });
+  } catch (error) {
+    console.error('[ACCOUNT-DELETE] Error:', error);
+    res.status(500).json({ error: 'Server error deleting account.' });
   }
 };

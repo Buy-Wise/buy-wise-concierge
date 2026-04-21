@@ -169,11 +169,10 @@ function HeroGeometric({
                         initial="hidden"
                         animate="visible"
                     >
-                        <h1 className="text-4xl sm:text-6xl md:text-8xl font-bold mb-6 md:mb-8 tracking-tight">
+                        <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold mb-6 md:mb-8 tracking-tight leading-tight md:leading-tight lg:leading-tight max-w-4xl mx-auto">
                             <span className="bg-clip-text text-transparent bg-gradient-to-b from-white to-white/80">
                                 {title1}
-                            </span>
-                            <br />
+                            </span>{' '}
                             <span
                                 className={cn(
                                     "bg-clip-text text-transparent bg-gradient-to-r from-[#D4AF37] via-white/90 to-amber-200 "
@@ -190,7 +189,7 @@ function HeroGeometric({
                         initial="hidden"
                         animate="visible"
                     >
-                        <p className="text-base sm:text-lg md:text-xl text-white/60 mb-8 leading-relaxed font-light tracking-wide max-w-xl mx-auto px-4">
+                        <p className="text-base sm:text-lg md:text-xl text-white/60 mb-8 leading-relaxed font-light tracking-wide max-w-3xl mx-auto px-4">
                             {subtitle}
                         </p>
                     </motion.div>

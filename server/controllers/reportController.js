@@ -35,10 +35,10 @@ const generateReport = async (req, res) => {
     if (process.env.GEMINI_API_KEY) {
       try {
         const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
-        rawOutput = response.text();
+      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      rawOutput = response.text();
       } catch (aiErr) {
         console.warn('[AI] Gemini Failed (Fallback to Mock):', aiErr.message);
         rawOutput = `# [MOCK] Research Report: ${form.product_category || 'Product'}
@@ -194,29 +194,40 @@ const runAutoGenerationPipeline = async (orderId) => {
     const prompt = buildReportPrompt(user, order, form);
     let rawOutput = '';
     
-    // First, try Gemini
+    // First, try Gemini (models ordered: fastest/cheapest first, most capable last)
     if (process.env.GEMINI_API_KEY) {
-      const gModels = ["gemini-1.5-flash", "gemini-pro"];
+      const gModels = ['gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-2.0-flash-lite'];
       for (const m of gModels) {
-        try {
-          console.log(`[AI] Gemini Attempt (${m}) for Order ${orderId}...`);
-          const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-          const gModel = genAI.getGenerativeModel({ 
-            model: m,
-            generationConfig: { temperature: 0.7, topP: 0.95, topK: 40, maxOutputTokens: 2048 }
-          });
-          const result = await gModel.generateContent(prompt);
-          const response = await result.response;
-          const text = response.text();
-          if (text && text.length > 300) {
-            rawOutput = text;
-            console.log(`[AI] Gemini Success with ${m}`);
-            break;
-          } else {
-            console.warn(`[AI] Gemini (${m}) returned too short output. Trying next...`);
+        if (rawOutput) break; // Already got output from a previous model
+        for (let attempt = 1; attempt <= 2; attempt++) {
+          try {
+            console.log(`[AI] Gemini Attempt #${attempt} (${m}) for Order ${orderId}...`);
+            const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+            const gModel = genAI.getGenerativeModel({
+              model: m,
+              generationConfig: { temperature: 0.7, topP: 0.95, topK: 40, maxOutputTokens: 2048 }
+            });
+            const result = await gModel.generateContent(prompt);
+            const response = await result.response;
+            const text = response.text();
+            if (text && text.length > 300) {
+              rawOutput = text;
+              console.log(`[AI] Gemini Success with ${m} (attempt #${attempt})`);
+              break; // inner loop
+            } else {
+              console.warn(`[AI] Gemini (${m}) returned too short output. Trying next model...`);
+              break; // short output — skip this model
+            }
+          } catch (e) {
+            const isRateLimit = e.message?.includes('429') || e.message?.includes('RESOURCE_EXHAUSTED') || e.message?.toLowerCase().includes('quota');
+            console.warn(`[AI] Gemini (${m}) attempt #${attempt} failed:`, e.message?.substring(0, 120));
+            if (isRateLimit && attempt < 2) {
+              console.log(`[AI] Rate limit hit — waiting 15s before retry...`);
+              await new Promise(r => setTimeout(r, 15000));
+            } else {
+              break; // Not rate limited or last attempt — move to next model
+            }
           }
-        } catch (e) {
-          console.warn(`[AI] Gemini (${m}) failed:`, e.message);
         }
       }
     }
@@ -255,18 +266,65 @@ const runAutoGenerationPipeline = async (orderId) => {
     }
 
     if (!rawOutput) {
-      throw new Error('AI Generation failed on all engines and no gold standard exists for this category/language.');
+      // Last-resort structural fallback — always deliver something useful
+      console.warn(`[AI] All engines failed for Order ${orderId}. Using structural fallback.`);
+      const cat = order.product_category || 'Product';
+      const budgetMin = form?.budget_min || 0;
+      const budgetMax = form?.budget_max || 0;
+      const useCase = form?.primary_use_case || 'General use';
+      rawOutput = `# Buy Wise Research Report — ${cat}
+
+## For: ${user?.name || 'Valued Customer'}
+**Budget:** ₹${Number(budgetMin).toLocaleString('en-IN')} – ₹${Number(budgetMax).toLocaleString('en-IN')}  
+**Primary Use:** ${useCase}
+
+---
+
+## Our Research Summary
+
+We have analysed the current market for **${cat}** products in your budget range.
+
+### What To Look For
+
+Given your budget of ₹${Number(budgetMin).toLocaleString('en-IN')}–₹${Number(budgetMax).toLocaleString('en-IN')} and use case of **${useCase}**, here are our key recommendations:
+
+1. **Prioritise value-for-money** — choose a brand with strong after-sales service in India (Samsung, Apple, Xiaomi, HP, Dell, Lenovo)
+2. **Check real-user reviews** on platforms like Smartprix, 91mobiles, or Notebookcheck rather than brand websites
+3. **Avoid buying at launch price** — wait 4–6 weeks after a product launch for the real-world verdict
+4. **Verify warranty terms** — ensure minimum 1-year manufacturer warranty with Indian service centres
+
+### Budget Guidance
+
+| Budget Range | Category |
+|---|---|
+| ₹10,000 – ₹20,000 | Entry-level / Budget |
+| ₹20,000 – ₹40,000 | Mid-range (Best Value) |
+| ₹40,000 – ₹70,000 | Upper mid-range |
+| ₹70,000+ | Premium / Flagship |
+
+Your budget of ₹${Number(budgetMax).toLocaleString('en-IN')} places you in the **${Number(budgetMax) >= 70000 ? 'Premium' : Number(budgetMax) >= 40000 ? 'Upper Mid-range' : Number(budgetMax) >= 20000 ? 'Mid-range (Best Value)' : 'Entry-level'}** tier.
+
+### Next Steps
+
+> **Note:** Our AI research engine encountered a temporary issue generating your personalised analysis. A member of our team will review your order and send you a detailed updated report within 24 hours. We apologise for the inconvenience.
+
+---
+*Report generated by Buy Wise | askbuywise.vercel.app*`;
     }
 
-
-
-
-
-    // 5. Save report data
-    await db.query(
-      'INSERT INTO reports (order_id, generated_prompt, raw_ai_output, formatted_report) VALUES ($1, $2, $3, $4) ON CONFLICT (order_id) DO NOTHING', // Actually order_id might not have unique constraint.
-      [orderId, prompt, rawOutput, rawOutput]
-    );
+    // 5. Save report data (check-then-upsert – safe without a UNIQUE constraint on order_id)
+    const existingRpt = await db.query('SELECT id FROM reports WHERE order_id = $1', [orderId]);
+    if (existingRpt.rows.length > 0) {
+      await db.query(
+        `UPDATE reports SET raw_ai_output = $1, formatted_report = $2, generated_prompt = $3, generated_at = NOW() WHERE order_id = $4`,
+        [rawOutput, rawOutput, prompt, orderId]
+      );
+    } else {
+      await db.query(
+        `INSERT INTO reports (order_id, generated_prompt, raw_ai_output, formatted_report) VALUES ($1, $2, $3, $4)`,
+        [orderId, prompt, rawOutput, rawOutput]
+      );
+    }
 
     // 6. Generate PDF
     const reportForPdf = {

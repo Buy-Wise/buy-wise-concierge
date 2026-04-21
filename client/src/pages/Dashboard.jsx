@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Package, Bell, FileText, Download, X, User, LogOut } from 'lucide-react';
+import { Package, Bell, FileText, Download, X, User, LogOut, MessageSquare, Sparkles, Trash2, AlertTriangle, CheckCircle, PlusCircle } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
+import FeedbackModal from '../components/FeedbackModal';
 
 const Dashboard = () => {
   const [activeTab, setActiveTab] = useState('orders'); // 'orders', 'alerts', 'profile'
@@ -10,7 +12,25 @@ const Dashboard = () => {
   const [timers, setTimers] = useState({}); // orderId -> seconds remaining
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [viewingPdf, setViewingPdf] = useState(null); // URL of PDF to view in modal
+  const [viewingPdf, setViewingPdf] = useState(null);
+  const [showPromoPopup, setShowPromoPopup] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirmInput, setDeleteConfirmInput] = useState('');
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [toast, setToast] = useState(null); // { message, type }
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 4000);
+  };
+
+  useEffect(() => {
+    if (localStorage.getItem('showPromo') === 'true') {
+      setShowPromoPopup(true);
+      localStorage.removeItem('showPromo');
+    }
+  }, []);
 
   const syncPayment = async (orderId) => {
     try {
@@ -61,10 +81,10 @@ const Dashboard = () => {
             if (o.status === 'PENDING') syncPayment(o.id);
           });
 
-          // Initialize timers for orders that are currently GENERATING
+          // Initialize timers for orders that are currently GENERATING or in pipeline
           const initialTimers = {};
           ordersData.orders.forEach(o => {
-            if (o.status === 'GENERATING' || o.status === 'PAID') {
+            if (o.status === 'GENERATING' || o.status === 'PAID' || o.status === 'FREE') {
               initialTimers[o.id] = 120; // 2 minutes
             }
           });
@@ -114,7 +134,7 @@ const Dashboard = () => {
             ));
             
             // If it just started generating, start a timer
-            if (data.newStatus === 'GENERATING' || data.newStatus === 'PAID') {
+            if (data.newStatus === 'GENERATING' || data.newStatus === 'PAID' || data.newStatus === 'FREE') {
               setTimers(prev => ({ ...prev, [data.orderId]: 120 }));
             }
             // If finished, remove timer
@@ -147,11 +167,13 @@ const Dashboard = () => {
     switch(status) {
       case 'PENDING': return <span className="px-3 py-1 rounded-full text-xs font-bold bg-yellow-500/20 text-yellow-500 border border-yellow-500/30">PENDING</span>;
       case 'PAID': return <span className="px-3 py-1 rounded-full text-xs font-bold bg-blue-500/20 text-blue-500 border border-blue-500/30">PAID</span>;
+      case 'FREE': return <span className="px-3 py-1 rounded-full text-xs font-bold bg-green-500/20 text-green-500 border border-green-500/30">FREE</span>;
       case 'IN_PROGRESS': return <span className="px-3 py-1 rounded-full text-xs font-bold bg-blue-500/20 text-blue-500 border border-blue-500/30">IN PROGRESS</span>;
       case 'GENERATING': return <span className="px-3 py-1 rounded-full text-xs font-bold bg-blue-500/20 text-blue-500 border border-blue-500/30">GENERATING</span>;
       case 'DELIVERED': return <span className="px-3 py-1 rounded-full text-xs font-bold bg-green-500/20 text-green-500 border border-green-500/30">DELIVERED</span>;
       case 'CANCELLED': return <span className="px-3 py-1 rounded-full text-xs font-bold bg-red-500/20 text-red-500 border border-red-500/30">CANCELLED</span>;
-      default: return null;
+      case 'GENERATION_FAILED': return <span className="px-3 py-1 rounded-full text-xs font-bold bg-red-500/20 text-red-500 border border-red-500/30">FAILED</span>;
+      default: return <span className="px-3 py-1 rounded-full text-xs font-bold bg-gray-500/20 text-gray-400 border border-gray-500/30">{status}</span>;
     }
   };
 
@@ -161,6 +183,29 @@ const Dashboard = () => {
       navigate('/login');
     } catch(e) {
       navigate('/login');
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmInput !== 'DELETE') return;
+    setDeleteLoading(true);
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/auth/users/me`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token') || ''}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        localStorage.clear();
+        navigate('/');
+      } else {
+        showToast(data.error || 'Failed to delete account', 'error');
+      }
+    } catch (err) {
+      showToast('Connection error', 'error');
+    } finally {
+      setDeleteLoading(false);
+      setShowDeleteModal(false);
     }
   };
 
@@ -194,7 +239,8 @@ const Dashboard = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8 md:py-20 min-h-screen">
+    <>
+      <div className="max-w-7xl mx-auto px-4 py-8 md:py-20 min-h-screen">
       
       {/* Mobile Tab Layout - Sticky top or visible only on mobile */}
       <div className="md:hidden flex overflow-x-auto space-x-2 border-b border-white/10 mb-8 pb-2 mt-16">
@@ -206,6 +252,9 @@ const Dashboard = () => {
         </button>
         <button onClick={() => setActiveTab('profile')} className={`px-4 py-2 font-medium whitespace-nowrap rounded-lg flex items-center space-x-2 ${activeTab === 'profile' ? 'bg-[#D4AF37] text-black' : 'text-gray-400 hover:text-white'}`}>
           <User size={18} /><span>Profile</span>
+        </button>
+        <button onClick={() => setShowFeedbackModal(true)} className="px-4 py-2 font-medium whitespace-nowrap rounded-lg flex items-center space-x-2 text-[#D4AF37] hover:text-white">
+          <PlusCircle size={18} /><span>Suggest Category</span>
         </button>
       </div>
 
@@ -243,6 +292,12 @@ const Dashboard = () => {
               >
                 <User size={20} /><span>Profile & Settings</span>
               </button>
+              <button 
+                onClick={() => setShowFeedbackModal(true)} 
+                className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg font-medium transition-colors text-gray-400 hover:text-white hover:bg-white/5"
+              >
+                <PlusCircle size={20} /><span>Suggest a Product</span>
+              </button>
             </nav>
 
             <div className="mt-8 border-t border-white/10 pt-6">
@@ -264,7 +319,7 @@ const Dashboard = () => {
                   <Package className="text-[#D4AF37] mr-3" />
                   <h2 className="text-xl font-bold">My Research Reports</h2>
                 </div>
-                {orders.some(o => o.status === 'GENERATING' || o.status === 'PAID') && (
+                {orders.some(o => o.status === 'GENERATING' || o.status === 'PAID' || o.status === 'FREE') && (
                   <div className="bg-[#D4AF37]/10 border border-[#D4AF37]/30 px-4 py-2 rounded-xl flex items-center space-x-3 animate-pulse">
                     <div className="w-2 h-2 bg-[#D4AF37] rounded-full"></div>
                     <span className="text-[#D4AF37] text-sm font-bold">Generation in progress. Please do not refresh!</span>
@@ -278,7 +333,7 @@ const Dashboard = () => {
                       <div className="flex items-center space-x-3 mb-2">
                         <span className="font-mono text-gray-400 text-xs bg-white/5 px-2 py-1 rounded">{order.id.slice(0,8).toUpperCase()}</span>
                         {getStatusBadge(order.status)}
-                        {(order.status === 'GENERATING' || order.status === 'PAID') && timers[order.id] > 0 && (
+                        {(order.status === 'GENERATING' || order.status === 'PAID' || order.status === 'FREE') && timers[order.id] > 0 && (
                           <span className="flex items-center text-[#D4AF37] text-xs font-bold animate-pulse">
                             <span className="w-2 h-2 bg-[#D4AF37] rounded-full mr-2"></span>
                             {Math.floor(timers[order.id] / 60)}:{(timers[order.id] % 60).toString().padStart(2, '0')}
@@ -297,7 +352,7 @@ const Dashboard = () => {
                     </div>
                     
                      <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3 mt-4 xl:mt-0">
-                      {order.status === 'DELIVERED' ? (
+                       {order.status === 'DELIVERED' ? (
                         <>
                           <button onClick={() => {
                             const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
@@ -310,11 +365,25 @@ const Dashboard = () => {
                             onClick={() => {
                               const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
                               const url = order.pdf_url.startsWith('http') ? order.pdf_url : `${baseUrl}${order.pdf_url}`;
-                              window.open(url, '_blank');
+                              const a = document.createElement('a');
+                              a.href = url;
+                              a.download = `BuyWise-Report-${order.id.slice(0,8)}.pdf`;
+                              a.target = '_blank';
+                              a.rel = 'noreferrer';
+                              document.body.appendChild(a);
+                              a.click();
+                              document.body.removeChild(a);
                             }} 
                             className="flex items-center justify-center space-x-2 bg-[#D4AF37] text-black px-8 py-2.5 rounded-xl font-bold hover:bg-[#b8972e] shadow-[0_4px_15px_rgba(212,175,55,0.25)] transition-all hover:-translate-y-0.5"
                           >
                             <Download size={18} /> <span>Download Report</span>
+                          </button>
+                          
+                          <button 
+                            onClick={() => window.open('https://tally.so/r/RGYGQK', '_blank')}
+                            className="flex items-center justify-center space-x-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold hover:from-blue-500 hover:to-indigo-500 shadow-[0_4px_15px_rgba(79,70,229,0.3)] transition-all hover:-translate-y-0.5 animate-pulse-slow"
+                          >
+                            <MessageSquare size={18} /> <span>Rate this Report</span>
                           </button>
                         </>
                       ) : (
@@ -322,10 +391,14 @@ const Dashboard = () => {
                           <div className={`text-sm flex items-center px-4 py-2.5 rounded-xl border ${
                             order.status === 'PENDING' 
                               ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' 
+                              : order.status === 'GENERATION_FAILED'
+                              ? 'bg-red-500/10 text-red-400 border-red-500/20'
                               : 'bg-[#D4AF37]/10 text-[#D4AF37] border-[#D4AF37]/20 font-bold'
                           }`}>
                              {order.status === 'PENDING' ? (
                                <span className="flex items-center italic"><Package size={16} className="mr-2" /> Waiting for confirmation...</span>
+                             ) : order.status === 'GENERATION_FAILED' ? (
+                               <span className="flex items-center"><AlertTriangle size={16} className="mr-2" /> Generation failed. Our team will resolve this.</span>
                              ) : (
                                <span className="flex items-center tracking-wide font-bold">
                                  <div className="mr-3 w-4 h-4 border-2 border-[#D4AF37] border-t-transparent rounded-full animate-spin"></div>
@@ -458,14 +531,166 @@ const Dashboard = () => {
                     Save Changes
                   </button>
                 </form>
+
+                {/* Task 4: Delete Account */}
+                <div className="mt-8 pt-6 border-t border-red-500/20">
+                  <h3 className="font-bold text-red-400 mb-1">Danger Zone</h3>
+                  <p className="text-sm text-white/40 mb-4">Permanently delete your account, all reports, and associated data. This cannot be undone.</p>
+                  <button
+                    onClick={() => setShowDeleteModal(true)}
+                    className="flex items-center space-x-2 border border-red-500/40 text-red-400 hover:bg-red-500/10 hover:border-red-500 px-5 py-2.5 rounded-lg font-medium text-sm transition-all"
+                  >
+                    <Trash2 size={16} />
+                    <span>Delete My Account</span>
+                  </button>
+                </div>
               </div>
             </div>
           )}
 
-        </div>
-      </div>
-    </div>
-  );
+        </div> {/* Close flex-1 tab contents */}
+      </div> {/* Close main flex layout */}
+    </div> {/* Close max-w-7xl container */}
+
+    {/* Task 4: Delete Confirmation Modal */}
+    <AnimatePresence>
+      {showDeleteModal && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm"
+        >
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.9, opacity: 0 }}
+            className="bg-[#111] border border-red-500/20 rounded-2xl w-full max-w-md p-8 shadow-2xl"
+          >
+            <div className="flex items-center space-x-3 text-red-500 mb-4">
+              <AlertTriangle size={24} />
+              <h2 className="text-xl font-bold italic">PROCEED WITH CAUTION</h2>
+            </div>
+            <p className="text-white/70 text-sm mb-6 leading-relaxed">
+              This will <span className="text-white font-bold">permanently delete</span> your account, your purchase history, and all generated reports. This action is irreversible.
+            </p>
+            
+            <div className="space-y-4">
+              <label className="block text-xs uppercase tracking-widest text-white/40 font-bold">
+                Type <span className="text-white">DELETE</span> to confirm
+              </label>
+              <input
+                type="text"
+                value={deleteConfirmInput}
+                onChange={(e) => setDeleteConfirmInput(e.target.value)}
+                className="w-full bg-black border border-white/10 rounded-lg p-3 text-white focus:border-red-500 focus:outline-none font-mono"
+                placeholder="DELETE"
+              />
+              
+              <div className="flex space-x-3 pt-4">
+                <button
+                  onClick={() => { setShowDeleteModal(false); setDeleteConfirmInput(''); }}
+                  className="flex-1 px-4 py-3 rounded-lg font-bold bg-white/5 hover:bg-white/10 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  disabled={deleteConfirmInput !== 'DELETE' || deleteLoading}
+                  onClick={handleDeleteAccount}
+                  className="flex-1 px-4 py-3 rounded-lg font-bold bg-red-600 text-white hover:bg-red-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all flex justify-center items-center"
+                >
+                  {deleteLoading ? <Loader2 className="animate-spin" size={20} /> : 'Delete Everything'}
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+
+    {/* Toast Notification */}
+    <AnimatePresence>
+      {toast && (
+        <motion.div
+          initial={{ y: 50, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: 20, opacity: 0 }}
+          className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-[110] flex items-center space-x-3 px-6 py-4 rounded-2xl border shadow-2xl ${
+            toast.type === 'error' ? 'bg-red-950 border-red-500/50 text-red-200' : 'bg-green-950 border-green-500/50 text-green-200'
+          }`}
+        >
+          {toast.type === 'error' ? <AlertTriangle size={20} /> : <CheckCircle size={20} />}
+          <span className="font-medium">{toast.message}</span>
+          <button onClick={() => setToast(null)} className="ml-4 opacity-50 hover:opacity-100"><X size={16} /></button>
+        </motion.div>
+      )}
+    </AnimatePresence>
+
+    {/* Welcome Premium Promotion Popup */}
+    <AnimatePresence>
+      {showPromoPopup && (
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+        >
+          <motion.div 
+            initial={{ scale: 0.9, y: 30, opacity: 0 }}
+            animate={{ scale: 1, y: 0, opacity: 1 }}
+            exit={{ scale: 0.95, opacity: 0 }}
+            transition={{ type: "spring", damping: 25, stiffness: 300, delay: 0.2 }}
+            className="bg-[#111] border border-[#D4AF37]/50 rounded-2xl w-full max-w-lg overflow-hidden relative shadow-[0_0_50px_rgba(212,175,55,0.15)]"
+          >
+            <button 
+              onClick={() => setShowPromoPopup(false)}
+              className="absolute top-4 right-4 text-white/50 hover:text-white transition-colors z-10 p-1"
+            >
+              <X size={24} />
+            </button>
+            
+            <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-transparent via-[#D4AF37] to-transparent"></div>
+            
+            <div className="p-8 text-center pt-12">
+              <div className="mx-auto w-16 h-16 bg-[#D4AF37]/10 rounded-full flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(212,175,55,0.2)]">
+                <Sparkles size={32} className="text-[#D4AF37]" />
+              </div>
+              
+              <h2 className="text-3xl font-bold mb-4 tracking-tight">You've Unlocked A <span className="text-[#D4AF37]">Premium Advantage.</span></h2>
+              
+              <p className="text-white/80 text-lg mb-6 leading-relaxed">
+                Congratulations! As a welcome gift, your account is now authorized for a <strong className="text-white font-bold">Free Premium Research Report</strong> (Normally <span className="line-through opacity-70">₹249</span>).
+              </p>
+              
+              <div className="bg-white/5 border border-[#D4AF37]/20 p-5 rounded-xl mb-8 text-left">
+                <p className="text-sm text-white/70 italic">
+                  "Most buyers waste weeks guessing and still buy the wrong product. You now have the power to let AI + Human intelligence make the perfect decision for you in minutes. Don't waste this opportunity."
+                </p>
+              </div>
+              
+              <button 
+                onClick={() => {
+                  setShowPromoPopup(false);
+                  navigate('/order');
+                }}
+                className="w-full bg-[#D4AF37] text-black font-extrabold pb-3 pt-4 px-6 rounded-xl hover:bg-white transition-all transform hover:scale-[1.02] shadow-[0_10px_30px_rgba(212,175,55,0.3)] tracking-wide uppercase text-sm"
+              >
+                Claim My Free Report Now
+              </button>
+              
+              <button 
+                onClick={() => setShowPromoPopup(false)}
+                className="mt-4 text-white/40 text-sm hover:text-white transition-colors"
+              >
+                I'll decide later &gt;
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  </>
+);
 };
 
 export default Dashboard;

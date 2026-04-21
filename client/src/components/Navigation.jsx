@@ -1,4 +1,4 @@
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Menu, X, LogOut } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
@@ -7,6 +7,7 @@ const Navigation = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userRole, setUserRole] = useState(null);
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -18,8 +19,10 @@ const Navigation = () => {
         .then(r => r.json())
         .then(data => { if (data.user) setUserRole(data.user.role); })
         .catch(() => {});
+    } else {
+      setUserRole(null);
     }
-  }, []);
+  }, [location]);
 
   const handleLogout = async () => {
     try {

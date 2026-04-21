@@ -5,6 +5,7 @@ import path from 'path'
 
 // https://vite.dev/config/
 export default defineConfig({
+  envDir: '../',
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
@@ -14,6 +15,9 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
-    host: true
+    host: true,
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin-allow-popups'
+    }
   }
 })

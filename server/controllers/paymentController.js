@@ -1,31 +1,52 @@
 const Razorpay = require('razorpay');
 const crypto = require('crypto');
 const db = require('../config/db');
-const { validatePaymentVerification } = require('razorpay/dist/utils/razorpay-utils');
 const { runAutoGenerationPipeline } = require('./reportController');
 const { broadcastOrderUpdate, broadcastToAllAdmins } = require('../utils/sseService');
 
-// Initialize Razorpay
-// Will fallback to mock values to prevent crash if env variables are not set yet
-const razorpay = new Razorpay({
-  key_id: (process.env.RAZORPAY_KEY_ID || '').trim() || 'mock_key_id',
-  key_secret: (process.env.RAZORPAY_KEY_SECRET || '').trim() || 'mock_key_secret',
-});
+// Helper: extract a readable message from a Razorpay error or a standard Error
+function extractErrorMessage(err) {
+  if (!err) return 'Unknown error';
+  // Razorpay SDK throws objects shaped: { statusCode, error: { code, description } }
+  if (err.error && err.error.description) return `Razorpay ${err.statusCode}: ${err.error.description}`;
+  if (err.error && err.error.code) return `Razorpay error: ${err.error.code}`;
+  if (err.statusCode) return `Razorpay HTTP ${err.statusCode} error`;
+  // Standard Error
+  if (err.message) return err.message;
+  // Fallback
+  try { return JSON.stringify(err); } catch { return String(err); }
+}
+
+// Lazily get a Razorpay instance using the freshest env vars
+function getRazorpay() {
+  const keyId = (process.env.RAZORPAY_KEY_ID || '').trim();
+  const keySecret = (process.env.RAZORPAY_KEY_SECRET || '').trim();
+  return new Razorpay({
+    key_id: keyId || 'mock_key_id',
+    key_secret: keySecret || 'mock_key_secret',
+  });
+}
+
+console.log('✅ paymentController module initialized');
 
 exports.createOrder = async (req, res) => {
+  const fs = require('fs');
   try {
     const { amount, service_tier, product_category, formData } = req.body;
     const userId = req.user.id; // from auth middleware
 
     const options = {
-      amount: amount, 
+      amount: amount,
       currency: "INR",
       receipt: `receipt_order_${Date.now()}`
     };
 
     let razorpayOrder;
-    if (process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_ID.startsWith('rzp_')) {
-      razorpayOrder = await razorpay.orders.create(options);
+    const keyId = (process.env.RAZORPAY_KEY_ID || '').trim();
+    if (keyId.startsWith('rzp_')) {
+      // Use a fresh Razorpay instance so we always pick up current env vars
+      const rzp = getRazorpay();
+      razorpayOrder = await rzp.orders.create(options);
     } else {
       razorpayOrder = {
         id: `mock_order_${Date.now()}`,
@@ -51,10 +72,20 @@ exports.createOrder = async (req, res) => {
       dbOrderId: orderId
     });
   } catch (error) {
-    const fs = require('fs');
-    fs.appendFileSync('payment_debug.txt', `[${new Date().toISOString()}] Create Order Error: ${error.message}\n`);
-    console.error('Error creating Razorpay order:', error);
-    res.status(500).json({ error: 'Server error creating order' });
+    const msg = extractErrorMessage(error);
+    const logLine = `[${new Date().toISOString()}] Create Order Error: ${msg} | Full: ${JSON.stringify(error, Object.getOwnPropertyNames(error))}\n`;
+    fs.appendFileSync('payment_debug.txt', logLine);
+    console.error('[CREATE-ORDER] Error:', msg, error);
+
+    // Distinguish Razorpay gateway errors from our own server errors
+    if (error.statusCode) {
+      // Razorpay API returned an error (401 = bad credentials, 4xx = bad request)
+      return res.status(502).json({
+        error: `Payment gateway error: ${msg}`,
+        gateway_status: error.statusCode
+      });
+    }
+    res.status(500).json({ error: `Server error creating order: ${msg}` });
   }
 };
 
@@ -108,8 +139,8 @@ exports.verifyPayment = async (req, res) => {
 
       // Trigger AI research in background
       runAutoGenerationPipeline(dbOrderId).catch(err => {
-        fs.appendFileSync('payment_debug.txt', `[${new Date().toISOString()}] Pipeline Error: ${err.message}\n`);
-        console.error('[PIPELINE] Async generation error:', err);
+        fs.appendFileSync('payment_debug.txt', `[${new Date().toISOString()}] Pipeline Error: ${extractErrorMessage(err)}\n`);
+        console.error('[PIPELINE] Async generation error:', extractErrorMessage(err), err);
       });
 
       res.status(200).json({ success: true, message: "Payment verified successfully" });
@@ -120,8 +151,10 @@ exports.verifyPayment = async (req, res) => {
       res.status(400).json({ success: false, message: "Invalid signature sent!" });
     }
   } catch (error) {
-    console.error('Error verifying payment:', error);
-    res.status(500).json({ success: false, message: "Internal server error" });
+    const msg = extractErrorMessage(error);
+    fs.appendFileSync('payment_debug.txt', `[${new Date().toISOString()}] Verify Error: ${msg}\n`);
+    console.error('[VERIFY-PAYMENT] Error:', msg, error);
+    res.status(500).json({ success: false, message: 'Internal server error during payment verification' });
   }
 };
 
@@ -231,5 +264,63 @@ exports.syncPaymentStatus = async (req, res) => {
   } catch (error) {
     console.error('[PAYMENT-SYNC] Fatal error:', error);
     res.status(500).json({ success: false, error: 'Internal server error during sync' });
+  }
+};
+
+// POST /api/payments/claim-free — Bypass Razorpay for first-time free report
+exports.claimFreeReport = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { service_tier, product_category, formData } = req.body;
+
+    // === SECURITY: Server-side idempotency check — never trust the frontend ===
+    const userResult = await db.query('SELECT free_report_used FROM users WHERE id = $1', [userId]);
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+    if (userResult.rows[0].free_report_used === true) {
+      return res.status(403).json({ error: 'Free report already claimed. Please proceed with payment.' });
+    }
+
+    // Create the order with amount=0 and status FREE
+    const orderResult = await db.query(
+      `INSERT INTO orders (user_id, service_tier, product_category, amount, status, razorpay_order_id)
+       VALUES ($1, $2, $3, 0, 'FREE', $4) RETURNING id`,
+      [userId, service_tier || 'PRO', product_category || 'PHONE', `free_${Date.now()}`]
+    );
+    const orderId = orderResult.rows[0].id;
+
+    // Save intake form
+    await db.query(
+      `INSERT INTO intake_forms (order_id, budget_min, budget_max, primary_use_case, preferences, priority_factors, additional_notes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [
+        orderId,
+        formData?.budget_min || 0,
+        formData?.budget_max || 0,
+        formData?.primary_use_case || 'General',
+        formData?.preferences || '',
+        formData?.priority_factors || '',
+        formData?.additional_notes || ''
+      ]
+    );
+
+    // Mark the user's free report as used (BEFORE pipeline — prevent race conditions)
+    await db.query('UPDATE users SET free_report_used = TRUE WHERE id = $1', [userId]);
+
+    // Broadcast SSE so dashboard updates immediately
+    const { broadcastOrderUpdate } = require('../utils/sseService');
+    broadcastOrderUpdate(userId, { type: 'ORDER_STATUS_CHANGED', orderId, newStatus: 'FREE', pdfAvailable: false });
+
+    // Fire the AI pipeline in background
+    runAutoGenerationPipeline(orderId).catch(err => {
+      console.error('[FREE-REPORT] Pipeline error:', err);
+    });
+
+    console.log(`[FREE-REPORT] User ${userId} claimed free report. Order: ${orderId}`);
+    res.status(200).json({ success: true, dbOrderId: orderId });
+  } catch (error) {
+    console.error('[FREE-REPORT] Error:', error);
+    res.status(500).json({ error: 'Server error processing free report.' });
   }
 };

@@ -1,26 +1,28 @@
 const jwt = require('jsonwebtoken');
 
 const verifyToken = (req, res, next) => {
-  let token = req.cookies?.token;
+  const tokenSources = [
+    req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.split(' ')[1] : null,
+    req.query.token,
+    req.cookies?.token
+  ].filter(t => t && t !== 'undefined' && t !== 'null' && t !== '');
 
-  if (!token) {
-    const authHeader = req.headers.authorization;
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      token = authHeader.split(' ')[1];
+  let lastError = null;
+
+  for (const token of tokenSources) {
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      req.user = decoded;
+      return next();
+    } catch (error) {
+      lastError = error;
     }
   }
 
-  if (!token) {
-    return res.status(401).json({ error: 'Access denied. No token provided.' });
-  }
-
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded; // { id, role }
-    next();
-  } catch (error) {
-    res.status(401).json({ error: 'Invalid token.' });
-  }
+  return res.status(401).json({ 
+    error: 'Access denied. Invalid or missing token.', 
+    details: lastError?.message 
+  });
 };
 
 const isAdmin = (req, res, next) => {

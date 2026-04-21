@@ -92,7 +92,7 @@ const SampleReport = () => {
               <p className="text-white font-bold text-xl mb-2">Get your personalised report</p>
               <p className="text-gray-400 text-sm mb-6">Unlock the full recommendation, buying guide, and price tips.</p>
               <Link to="/order" className="bg-[#D4AF37] text-black px-8 py-3 rounded-lg font-bold hover:bg-[#b8972e] shadow-[0_0_20px_rgba(212,175,55,0.3)]">
-                Get My Report — From ₹199
+                Get My Report — From ₹149
               </Link>
             </div>
           </div>

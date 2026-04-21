@@ -8,5 +8,8 @@
     "dev": "concurrently \"npm run client\" \"npm run server\""
   },
   "keywords": [],
-  "author": ""
+  "author": "",
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
 }
