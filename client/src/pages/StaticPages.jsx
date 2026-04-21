@@ -1,31 +1,72 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { Loader2 } from 'lucide-react';
 
-const Contact = () => (
-  <div className="max-w-2xl mx-auto px-4 py-32">
-    <h1 className="text-4xl font-bold mb-4">Contact Us</h1>
-    <p className="text-gray-400 mb-10">Have a question? We're here to help.</p>
-    <div className="grid gap-6 mb-10">
-      <a href="mailto:support@buywiseindia.com"
-        className="flex items-center bg-[#D4AF37]/10 border border-[#D4AF37]/30 rounded-xl p-6 hover:bg-[#D4AF37]/20 transition-all">
-        <div className="w-12 h-12 bg-[#D4AF37] rounded-full flex items-center justify-center mr-4 text-black font-bold text-xl">@</div>
+const Contact = () => {
+  const [formData, setFormData] = useState({ name: '', email: '', message: '' });
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+      const res = await fetch(`${baseUrl}/api/feedback/contact`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData)
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert('Thank you! Your message has been sent successfully.');
+        setFormData({ name: '', email: '', message: '' });
+      } else {
+        alert(data.error || 'Failed to send message.');
+      }
+    } catch (err) {
+      alert('Network error. Please try again later.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="max-w-2xl mx-auto px-4 py-32">
+      <h1 className="text-4xl font-bold mb-4">Contact Us</h1>
+      <p className="text-gray-400 mb-10">Have a question? We're here to help.</p>
+      <div className="grid gap-6 mb-10">
+        <a href="mailto:buywiseconcierge@gmail.com"
+          className="flex items-center bg-[#D4AF37]/10 border border-[#D4AF37]/30 rounded-xl p-6 hover:bg-[#D4AF37]/20 transition-all">
+          <div className="w-12 h-12 bg-[#D4AF37] rounded-full flex items-center justify-center mr-4 text-black font-bold text-xl">@</div>
+          <div>
+            <div className="font-bold text-lg text-white">Email Support</div>
+            <div className="text-gray-400">buywiseconcierge@gmail.com • Reply within 1 hour</div>
+          </div>
+        </a>
+      </div>
+      <form onSubmit={handleSubmit} className="bg-[#111] border border-white/10 rounded-2xl p-8 space-y-5">
+        <h2 className="text-xl font-bold">Or send a message</h2>
         <div>
-          <div className="font-bold text-lg text-white">Email Support</div>
-          <div className="text-gray-400">support@buywiseindia.com • Reply within 1 hour</div>
+          <label className="block text-sm text-gray-400 mb-1">Name</label>
+          <input required type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg p-3 text-white focus:border-[#D4AF37] focus:outline-none" placeholder="Your Name" />
         </div>
-      </a>
+        <div>
+          <label className="block text-sm text-gray-400 mb-1">Email</label>
+          <input required type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg p-3 text-white focus:border-[#D4AF37] focus:outline-none" placeholder="you@email.com" />
+        </div>
+        <div>
+          <label className="block text-sm text-gray-400 mb-1">Message</label>
+          <textarea required rows="4" value={formData.message} onChange={e => setFormData({...formData, message: e.target.value})} className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg p-3 text-white focus:border-[#D4AF37] focus:outline-none" placeholder="Your question or concern..." />
+        </div>
+        <button disabled={loading} type="submit" className="w-full flex items-center justify-center bg-[#D4AF37] text-black py-3 rounded-lg font-bold hover:bg-[#b8972e] disabled:opacity-50 transition-colors">
+          {loading ? <Loader2 className="animate-spin mr-2" size={20} /> : null}
+          {loading ? 'Sending...' : 'Send Message'}
+        </button>
+      </form>
     </div>
-    <form className="bg-[#111] border border-white/10 rounded-2xl p-8 space-y-5">
-      <h2 className="text-xl font-bold">Or send an email</h2>
-      <div><label className="block text-sm text-gray-400 mb-1">Name</label>
-        <input type="text" className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg p-3 text-white focus:border-[#D4AF37] focus:outline-none" placeholder="Your Name" /></div>
-      <div><label className="block text-sm text-gray-400 mb-1">Email</label>
-        <input type="email" className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg p-3 text-white focus:border-[#D4AF37] focus:outline-none" placeholder="you@email.com" /></div>
-      <div><label className="block text-sm text-gray-400 mb-1">Message</label>
-        <textarea rows="4" className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg p-3 text-white focus:border-[#D4AF37] focus:outline-none" placeholder="Your question or concern..." /></div>
-      <button className="w-full bg-[#D4AF37] text-black py-3 rounded-lg font-bold hover:bg-[#b8972e]">Send Message</button>
-    </form>
-  </div>
-);
+  );
+};
 
 const Privacy = () => (
   <div className="max-w-3xl mx-auto px-4 py-32 prose prose-invert">

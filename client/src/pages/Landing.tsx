@@ -11,9 +11,9 @@ const Landing = () => {
       {/* 1. HERO SECTION */}
       <HeroGeometric 
         badge="Stop guessing. Start buying right."
-        title1="Don't guess what to buy."
-        title2="Know exactly what to buy"
-        subtitle="Don't waste ₹50,000 on the wrong product. Get an AI + human-verified research report and make the perfect buying decision in minutes."
+        title1="Skip the Endless Research."
+        title2="Buy the Perfect Product."
+        subtitle="Protect your ₹50,000 investment with certainty. Our AI + Expert-Verified reports cut through the noise and give you the one clear answer so you buy right, every time."
       >
         <div className="flex justify-center mt-6 w-full">
           <Link to="/order" className="inline-flex items-center justify-center bg-[#D4AF37] text-black w-full sm:w-auto px-10 py-5 rounded-2xl font-bold text-xl hover:bg-[#b8972e] shadow-[0_4px_30px_rgba(212,175,55,0.4)] transition-all hover:-translate-y-1">
@@ -215,7 +215,7 @@ const Landing = () => {
       {/* 7. TRUST SECTION */}
       <section className="py-16 bg-[#0A0A0A] border-y border-white/5 text-center px-4">
         <div className="max-w-3xl mx-auto">
-           <h3 className="text-2xl font-bold mb-4">Powered by AI + Human Verification</h3>
+           <h3 className="text-2xl font-bold mb-4">Powered by AI + Human Intelligence</h3>
            <p className="text-gray-400 text-lg">
              We don't promote products. We don't take brand sponsorships. <br />
              <span className="text-[#D4AF37] font-bold">We only recommend based on your exact needs.</span>

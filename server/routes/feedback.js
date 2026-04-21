@@ -80,4 +80,37 @@ router.post('/suggest', verifyToken, feedbackLimiter, async (req, res) => {
   }
 });
 
+// POST /api/feedback/contact — For Contact Us page
+router.post('/contact', feedbackLimiter, async (req, res) => {
+  try {
+    const { name, email, message } = req.body;
+    if (!name || !email || !message) {
+      return res.status(400).json({ error: 'All fields are required.' });
+    }
+
+    const transporter = require('nodemailer').createTransport({
+      host: process.env.EMAIL_SERVICE_HOST,
+      port: process.env.EMAIL_SERVICE_PORT,
+      secure: true,
+      auth: {
+        user: process.env.EMAIL_SERVICE_USER,
+        pass: process.env.EMAIL_SERVICE_PASS,
+      },
+    });
+
+    await transporter.sendMail({
+      from: `"Buy Wise System" <${process.env.EMAIL_FROM_ADDRESS}>`,
+      to: 'buywiseconcierge@gmail.com', // Recipient as requested by the user
+      replyTo: email,
+      subject: `Contact Us: Message from ${sanitize(name)}`,
+      text: `You have received a new message from the Contact Us form.\n\nName: ${sanitize(name)}\nEmail: ${sanitize(email)}\n\nMessage:\n${sanitize(message)}\n`
+    });
+
+    res.status(200).json({ success: true, message: 'Message sent successfully.' });
+  } catch (error) {
+    console.error('[CONTACT FORM ERROR]', error);
+    res.status(500).json({ error: 'Failed to send message. Please try again later.' });
+  }
+});
+
 module.exports = router;

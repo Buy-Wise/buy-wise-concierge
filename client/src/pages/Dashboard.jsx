@@ -197,7 +197,7 @@ const Dashboard = () => {
       const data = await res.json();
       if (data.success) {
         localStorage.clear();
-        navigate('/');
+        window.location.href = '/';
       } else {
         showToast(data.error || 'Failed to delete account', 'error');
       }
