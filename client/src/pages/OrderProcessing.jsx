@@ -66,7 +66,7 @@ const OrderProcessing = () => {
             <p className="text-xl font-semibold mb-2 text-white">
               {status === 'PENDING' ? 'Confirming Payment...' : 
                status === 'PAID' ? 'Preparing Research...' : 
-               'AI is Generating Your Report...'}
+               'We are generating your report...'}
             </p>
             <p className="text-zinc-400 max-w-xs mx-auto text-sm">
               {status === 'PENDING' ? 'Waiting for final confirmation from Razorpay.' : 
