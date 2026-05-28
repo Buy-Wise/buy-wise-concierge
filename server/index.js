@@ -1,3 +1,9 @@
+// ── DNS FIX: Force IPv4-first resolution (fixes ENETUNREACH on Render/IPv6-less hosts) ──
+const dns = require('dns');
+if (dns.setDefaultResultOrder) {
+  dns.setDefaultResultOrder('ipv4first');
+}
+
 require('dotenv').config({ path: '../.env' }); // or use default .env in server folder
 const express = require('express');
 const cors = require('cors');
