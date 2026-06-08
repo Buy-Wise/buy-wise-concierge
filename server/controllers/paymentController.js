@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const db = require('../config/db');
 const { runAutoGenerationPipeline } = require('./reportController');
 const { broadcastOrderUpdate, broadcastToAllAdmins } = require('../utils/sseService');
+const fs = require('fs').promises;
 
 // Helper: extract a readable message from a Razorpay error or a standard Error
 function extractErrorMessage(err) {
@@ -15,6 +16,16 @@ function extractErrorMessage(err) {
   if (err.message) return err.message;
   // Fallback
   try { return JSON.stringify(err); } catch { return String(err); }
+}
+
+// Non-blocking asynchronous logging helper to protect the event loop
+async function logPaymentDebug(message) {
+  try {
+    const logLine = `[${new Date().toISOString()}] ${message}\n`;
+    await fs.appendFile('payment_debug.txt', logLine);
+  } catch (err) {
+    console.error('[LOG ERROR] Could not write to payment_debug.txt:', err.message);
+  }
 }
 
 // Lazily get a Razorpay instance using the freshest env vars
@@ -30,7 +41,6 @@ function getRazorpay() {
 console.log('✅ paymentController module initialized');
 
 exports.createOrder = async (req, res) => {
-  const fs = require('fs');
   try {
     const { amount, service_tier, product_category, formData } = req.body;
     const userId = req.user.id; // from auth middleware
@@ -73,8 +83,7 @@ exports.createOrder = async (req, res) => {
     });
   } catch (error) {
     const msg = extractErrorMessage(error);
-    const logLine = `[${new Date().toISOString()}] Create Order Error: ${msg} | Full: ${JSON.stringify(error, Object.getOwnPropertyNames(error))}\n`;
-    fs.appendFileSync('payment_debug.txt', logLine);
+    logPaymentDebug(`Create Order Error: ${msg} | Full: ${JSON.stringify(error, Object.getOwnPropertyNames(error))}`);
     console.error('[CREATE-ORDER] Error:', msg, error);
 
     // Distinguish Razorpay gateway errors from our own server errors
@@ -85,16 +94,16 @@ exports.createOrder = async (req, res) => {
         gateway_status: error.statusCode
       });
     }
-    res.status(500).json({ error: `Server error creating order: ${msg}` });
+
+    res.status(500).json({ error: 'Failed to create order' });
   }
 };
 
 exports.verifyPayment = async (req, res) => {
-  const fs = require('fs');
   try {
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature, dbOrderId } = req.body;
     
-    fs.appendFileSync('payment_debug.txt', `[${new Date().toISOString()}] Verify Call: Order=${razorpay_order_id}, Pay=${razorpay_payment_id}, Sig=${razorpay_signature}\n`);
+    logPaymentDebug(`Verify Call: Order=${razorpay_order_id}, Pay=${razorpay_payment_id}, Sig=${razorpay_signature}`);
     console.log(`[PAYMENT] Verifying OrderID: ${razorpay_order_id}, PayID: ${razorpay_payment_id}, DB_ID: ${dbOrderId}`);
 
     // 1. Validate inputs
@@ -123,7 +132,7 @@ exports.verifyPayment = async (req, res) => {
     }
 
     if (isAuthentic) {
-      fs.appendFileSync('payment_debug.txt', `[${new Date().toISOString()}] SUCCESS for ${dbOrderId}\n`);
+      logPaymentDebug(`SUCCESS for ${dbOrderId}`);
       // Logic for successful payment
       await db.query(
         "UPDATE orders SET status = 'PAID', razorpay_payment_id = $1, razorpay_signature = $2, last_error = NULL WHERE id = $3",
@@ -139,26 +148,25 @@ exports.verifyPayment = async (req, res) => {
 
       // Trigger AI research in background
       runAutoGenerationPipeline(dbOrderId).catch(err => {
-        fs.appendFileSync('payment_debug.txt', `[${new Date().toISOString()}] Pipeline Error: ${extractErrorMessage(err)}\n`);
+        logPaymentDebug(`Pipeline Error: ${extractErrorMessage(err)}`);
         console.error('[PIPELINE] Async generation error:', extractErrorMessage(err), err);
       });
 
       res.status(200).json({ success: true, message: "Payment verified successfully" });
     } else {
       console.error('[PAYMENT] Signature Mismatch! Logic failed.');
-      fs.appendFileSync('payment_debug.txt', `[${new Date().toISOString()}] FAIL: Signature Mismatch for ${dbOrderId}\n`);
+      logPaymentDebug(`FAIL: Signature Mismatch for ${dbOrderId}`);
       await db.query('UPDATE orders SET last_error = $1 WHERE id = $2', [`Signature Mismatch during verification.`, dbOrderId]);
       res.status(400).json({ success: false, message: "Invalid signature sent!" });
     }
   } catch (error) {
     const msg = extractErrorMessage(error);
-    fs.appendFileSync('payment_debug.txt', `[${new Date().toISOString()}] Verify Error: ${msg}\n`);
+    logPaymentDebug(`Verify Error: ${msg}`);
     console.error('[VERIFY-PAYMENT] Error:', msg, error);
     res.status(500).json({ success: false, message: 'Internal server error during payment verification' });
   }
 };
 
-// Razorpay server-to-server webhook handler (no JWT required — uses webhook signature)
 exports.webhookVerify = async (req, res) => {
   try {
     const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
@@ -172,9 +180,11 @@ exports.webhookVerify = async (req, res) => {
       return res.status(400).json({ error: 'Missing signature header' });
     }
 
+    // Verify using rawBody if available, otherwise stringified body
+    const rawBody = req.rawBody || JSON.stringify(req.body);
     const expectedSignature = crypto
       .createHmac('sha256', webhookSecret)
-      .update(JSON.stringify(req.body))
+      .update(rawBody)
       .digest('hex');
 
     if (expectedSignature !== signature) {
@@ -182,40 +192,48 @@ exports.webhookVerify = async (req, res) => {
       return res.status(400).json({ error: 'Invalid signature' });
     }
 
-    // Respond 200 immediately (Razorpay needs fast response)
+    // Respond 200 immediately (Razorpay requires a fast acknowledgement)
     res.status(200).json({ status: 'ok' });
 
-    // Process asynchronously
-    const event = req.body.event;
-    if (event === 'payment.captured' || event === 'order.paid') {
-      const payment = req.body.payload?.payment?.entity;
-      const razorpayOrderId = payment?.order_id;
-      if (!razorpayOrderId) return;
+    // Process asynchronously — isolated try/catch so any error after the 200 response
+    // is committed cannot bubble to the outer handler or attempt a double header send.
+    try {
+      const event = req.body.event;
+      if (event === 'payment.captured' || event === 'order.paid') {
+        const payment = req.body.payload?.payment?.entity;
+        const razorpayOrderId = payment?.order_id;
+        if (!razorpayOrderId) return;
 
-      // Find our DB order by razorpay_order_id
-      const orderResult = await db.query(
-        'SELECT id, status FROM orders WHERE razorpay_order_id = $1',
-        [razorpayOrderId]
-      );
-      if (orderResult.rows.length === 0) return;
+        // Find our DB order by razorpay_order_id
+        const orderResult = await db.query(
+          'SELECT id, status FROM orders WHERE razorpay_order_id = $1',
+          [razorpayOrderId]
+        );
+        if (orderResult.rows.length === 0) return;
 
-      const order = orderResult.rows[0];
-      if (order.status !== 'PENDING') return; // Already processed
+        const order = orderResult.rows[0];
+        if (order.status !== 'PENDING') return; // Already processed
 
-      await db.query(
-        "UPDATE orders SET status = 'PAID', razorpay_payment_id = $1, last_error = NULL WHERE id = $2",
-        [payment.id, order.id]
-      );
-      console.log(`[WEBHOOK] Order ${order.id} status changed: PENDING → PAID`);
+        await db.query(
+          "UPDATE orders SET status = 'PAID', razorpay_payment_id = $1, last_error = NULL WHERE id = $2",
+          [payment.id, order.id]
+        );
+        console.log(`[WEBHOOK] Order ${order.id} status changed: PENDING → PAID`);
 
-      // Trigger auto-generation
-      runAutoGenerationPipeline(order.id).catch(err => {
-        console.error('[WEBHOOK] Pipeline error:', err);
-      });
+        // Trigger auto-generation
+        runAutoGenerationPipeline(order.id).catch(err => {
+          console.error('[WEBHOOK] Pipeline error:', err);
+        });
+      }
+    } catch (asyncError) {
+      // Response already committed — log but do NOT attempt to re-send headers
+      console.error('[WEBHOOK] Post-ack async processing error:', asyncError);
     }
   } catch (error) {
-    console.error('[WEBHOOK] Error:', error);
-    // Don't send error response — already responded 200
+    console.error('[WEBHOOK] Signature/pre-ack error:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Webhook processing error', details: error.message });
+    }
   }
 };
 
@@ -239,7 +257,8 @@ exports.syncPaymentStatus = async (req, res) => {
       console.log(`[PAYMENT-SYNC] Checking Razorpay for Order: ${order.razorpay_order_id}`);
       try {
         // Correct Razorpay SDK method to fetch payments for an order
-        const rzpPayments = await razorpay.orders.fetchPayments(order.razorpay_order_id);
+        const rzp = getRazorpay();
+        const rzpPayments = await rzp.orders.fetchPayments(order.razorpay_order_id);
         const payments = rzpPayments.items || [];
         const successfulPayment = payments.find(p => p.status === 'captured');
 

@@ -232,24 +232,29 @@ exports.updateProfile = async (req, res) => {
 };
 
 exports.deleteAccount = async (req, res) => {
-  try {
-    const userId = req.user.id;
+  const userId = req.user.id;
+  const client = await db.pool.connect();
 
-    // Manual cascading deletes to ensure total data removal
+  try {
+    await client.query('BEGIN');
+
+    // Manual cascading deletes within a transaction to ensure total data removal atomic integrity
     // 1. Delete reports associated with user's orders
-    await db.query('DELETE FROM reports WHERE order_id IN (SELECT id FROM orders WHERE user_id = $1)', [userId]);
+    await client.query('DELETE FROM reports WHERE order_id IN (SELECT id FROM orders WHERE user_id = $1)', [userId]);
     
     // 2. Delete intake forms associated with user's orders
-    await db.query('DELETE FROM intake_forms WHERE order_id IN (SELECT id FROM orders WHERE user_id = $1)', [userId]);
+    await client.query('DELETE FROM intake_forms WHERE order_id IN (SELECT id FROM orders WHERE user_id = $1)', [userId]);
     
     // 3. Delete feedback from user
-    await db.query('DELETE FROM feedback WHERE user_id = $1', [userId]);
+    await client.query('DELETE FROM feedback WHERE user_id = $1', [userId]);
 
     // 4. Delete orders from user
-    await db.query('DELETE FROM orders WHERE user_id = $1', [userId]);
+    await client.query('DELETE FROM orders WHERE user_id = $1', [userId]);
 
     // 5. Delete the user themselves
-    await db.query('DELETE FROM users WHERE id = $1', [userId]);
+    await client.query('DELETE FROM users WHERE id = $1', [userId]);
+
+    await client.query('COMMIT');
 
     // Clear auth cookie
     res.clearCookie('token');
@@ -257,7 +262,10 @@ exports.deleteAccount = async (req, res) => {
     console.log(`[ACCOUNT-DELETE] User ${userId} and all associated data permanently deleted.`);
     res.json({ success: true, message: 'Account and all data permanently deleted.' });
   } catch (error) {
+    await client.query('ROLLBACK');
     console.error('[ACCOUNT-DELETE] Error:', error);
     res.status(500).json({ error: 'Server error deleting account.' });
+  } finally {
+    client.release();
   }
 };

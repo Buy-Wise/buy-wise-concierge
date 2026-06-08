@@ -4,10 +4,19 @@ if (dns.setDefaultResultOrder) {
   dns.setDefaultResultOrder('ipv4first');
 }
 
-require('dotenv').config({ path: '../.env' }); // or use default .env in server folder
+// Global Process Crash Guards
+process.on('uncaughtException', (err) => {
+  console.error('CRITICAL ERROR - UNCAUGHT EXCEPTION:', err);
+});
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('CRITICAL ERROR - UNHANDLED REJECTION AT:', promise, 'REASON:', reason);
+});
+
+require('dotenv').config({ path: '../.env' }); // Loads root-level .env (the single source of truth)
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -27,7 +36,11 @@ app.use(cors({
   },
   credentials: true
 }));
-app.use(express.json());
+app.use(express.json({
+  verify: (req, res, buf) => {
+    req.rawBody = buf;
+  }
+}));
 const cookieParser = require('cookie-parser');
 app.use(cookieParser());
 
@@ -100,7 +113,9 @@ async function runMigrations() {
   }
   console.log('✅ Migrations complete.');
 }
-runMigrations();
+runMigrations().catch(err => {
+  console.error('[STARTUP] Migration Runner failed:', err);
+});
 
 // --- RAZORPAY CREDENTIAL CHECK AT STARTUP ---
 async function checkRazorpayCredentials() {
@@ -128,7 +143,9 @@ async function checkRazorpayCredentials() {
     console.warn('[RAZORPAY] ⚠️  Credential check error:', e.message || e);
   }
 }
-checkRazorpayCredentials();
+checkRazorpayCredentials().catch(err => {
+  console.error('[STARTUP] Razorpay credential check failed:', err);
+});
 
 // Routes imports
 const authRoutes = require('./routes/auth');
@@ -141,9 +158,16 @@ const adminRoutes = require('./routes/admin');
 const alertRoutes = require('./routes/alerts');
 const eventRoutes = require('./routes/events');
 
-// Basic API check
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', message: 'Buy Wise API is running' });
+// Public health check and keep-alive endpoint for cron/n8n/uptime monitoring
+app.get('/api/health', async (req, res) => {
+  try {
+    // Execute micro-resource query to satisfy Supabase 7-day activity check
+    await db.pool.query('SELECT 1;');
+    res.status(200).json({ status: 'healthy', database: 'connected', timestamp: new Date() });
+  } catch (err) {
+    console.error('HEARTBEAT FAULT: Keep-alive database ping failed:', err);
+    res.status(500).json({ status: 'unhealthy', error: 'Database connection failed' });
+  }
 });
 
 // App Routes setup

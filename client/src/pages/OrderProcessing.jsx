@@ -1,13 +1,129 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
 
+/* ─── Inline keyframe styles injected once into the document head ─── */
+const KEYFRAME_STYLES = `
+@keyframes bw-sweep {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+@keyframes bw-orbit {
+  0%   { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+@keyframes bw-pulse-scale {
+  0%, 100% { transform: scale(1);   opacity: 1;   }
+  50%       { transform: scale(1.12); opacity: 0.7; }
+}
+@keyframes bw-fade-up {
+  0%   { opacity: 0; transform: translateY(16px); }
+  100% { opacity: 1; transform: translateY(0);    }
+}
+@keyframes bw-shimmer-bg {
+  0%   { background-position: 200% center; }
+  100% { background-position: -200% center; }
+}
+`;
+
+function injectStyles() {
+  if (document.getElementById('bw-op-keyframes')) return;
+  const style = document.createElement('style');
+  style.id = 'bw-op-keyframes';
+  style.textContent = KEYFRAME_STYLES;
+  document.head.appendChild(style);
+}
+
+/* ─── SVG Spinner (pure CSS orbit, no external lib needed) ─── */
+function OrbitSpinner({ size = 72 }) {
+  return (
+    <div
+      style={{
+        width: size,
+        height: size,
+        borderRadius: '50%',
+        border: '4px solid rgba(212,175,55,0.18)',
+        borderTop: '4px solid #D4AF37',
+        borderRight: '4px solid rgba(212,175,55,0.55)',
+        animation: 'bw-orbit 1s linear infinite',
+        flexShrink: 0,
+      }}
+    />
+  );
+}
+
+/* ─── Looping shimmer progress bar ─── */
+function ShimmerBar() {
+  return (
+    <div
+      style={{
+        width: '100%',
+        height: 6,
+        borderRadius: 99,
+        background: 'rgba(255,255,255,0.07)',
+        overflow: 'hidden',
+        position: 'relative',
+        marginTop: 28,
+      }}
+    >
+      {/* Base fill */}
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          background: 'linear-gradient(90deg, #9a7a1a 0%, #D4AF37 50%, #9a7a1a 100%)',
+          backgroundSize: '200% 100%',
+          animation: 'bw-shimmer-bg 2s linear infinite',
+        }}
+      />
+      {/* Travelling highlight */}
+      <div
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          height: '100%',
+          width: '40%',
+          background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.38), transparent)',
+          animation: 'bw-sweep 1.6s ease-in-out infinite',
+        }}
+      />
+    </div>
+  );
+}
+
+/* ─── Elapsed seconds label ─── */
+function ElapsedLabel({ seconds }) {
+  return (
+    <p
+      style={{
+        fontSize: 12,
+        color: 'rgba(212,175,55,0.65)',
+        marginTop: 10,
+        fontVariantNumeric: 'tabular-nums',
+        letterSpacing: '0.04em',
+      }}
+    >
+      {seconds > 0 ? `${seconds}s elapsed` : 'Starting…'}
+    </p>
+  );
+}
+
+/* ════════════════════════════════════════════
+   Main Component
+════════════════════════════════════════════ */
 const OrderProcessing = () => {
   const [searchParams] = useSearchParams();
   const orderId = searchParams.get('orderId');
-  const isFree = searchParams.get('free') === 'true';
+  const isFree  = searchParams.get('free') === 'true';
   const navigate = useNavigate();
-  const [status, setStatus] = useState('GENERATING');
+
+  const [status, setStatus]           = useState('GENERATING');
+  const [elapsedTime, setElapsedTime] = useState(0);
+  // Hold the interval reference so we can kill it cleanly on timeout or unmount
+  const intervalRef = useRef(null);
+
+  /* ── inject keyframes once ── */
+  useEffect(() => { injectStyles(); }, []);
 
   useEffect(() => {
     if (!orderId) {
@@ -18,9 +134,10 @@ const OrderProcessing = () => {
     const checkStatus = async () => {
       try {
         const token = localStorage.getItem('token');
-        const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/reports/${orderId}/status`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
+        const res = await fetch(
+          `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/reports/${orderId}/status`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
         const data = await res.json();
 
         if (data.status === 'DELIVERED') {
@@ -37,51 +154,195 @@ const OrderProcessing = () => {
     };
 
     checkStatus();
-    const interval = setInterval(checkStatus, 5000);
+    intervalRef.current = setInterval(() => {
+      setElapsedTime(prev => {
+        const next = prev + 5;
+        // 90-second free-tier cold-boot escape hatch: stop polling cleanly
+        if (next >= 90 && intervalRef.current) {
+          clearInterval(intervalRef.current);
+          intervalRef.current = null;
+          console.info('[OrderProcessing] 90s timeout reached — polling stopped, user redirected to dashboard prompt.');
+        }
+        return next;
+      });
+      checkStatus();
+    }, 5000);
 
-    return () => clearInterval(interval);
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
   }, [orderId, navigate]);
 
+  /* ─── Shared container styles ─── */
+  const wrapStyle = {
+    minHeight: 'calc(100vh - 64px)',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '16px',
+    boxSizing: 'border-box',
+  };
+
+  const cardStyle = {
+    width: '100%',
+    maxWidth: 460,
+    background: 'rgba(24,24,27,0.92)',
+    border: '1px solid rgba(212,175,55,0.18)',
+    borderRadius: 20,
+    padding: 'clamp(24px, 6vw, 40px)',
+    textAlign: 'center',
+    boxShadow: '0 24px 64px rgba(0,0,0,0.55), 0 0 0 1px rgba(212,175,55,0.06)',
+    animation: 'bw-fade-up 0.45s ease both',
+    boxSizing: 'border-box',
+  };
+
+  const headingStyle = {
+    fontSize: 'clamp(20px, 5vw, 26px)',
+    fontWeight: 700,
+    color: '#D4AF37',
+    marginBottom: 4,
+    lineHeight: 1.25,
+  };
+
+  const subHeadingStyle = {
+    fontSize: 'clamp(15px, 3.5vw, 18px)',
+    fontWeight: 600,
+    color: '#fff',
+    margin: '20px 0 8px',
+  };
+
+  const bodyStyle = {
+    fontSize: 'clamp(13px, 3vw, 14px)',
+    color: 'rgba(161,161,170,0.9)',
+    lineHeight: 1.6,
+    maxWidth: 340,
+    margin: '0 auto',
+  };
+
+  const btnStyle = {
+    display: 'block',
+    width: '100%',
+    marginTop: 20,
+    padding: '14px 20px',
+    background: '#D4AF37',
+    color: '#000',
+    border: 'none',
+    borderRadius: 10,
+    fontWeight: 700,
+    fontSize: 15,
+    cursor: 'pointer',
+    touchAction: 'manipulation',
+    transition: 'background 0.2s, transform 0.1s',
+    WebkitTapHighlightColor: 'transparent',
+  };
+
+  /* ─── FAILED STATE ─── */
+  if (status === 'FAILED') {
+    return (
+      <div style={wrapStyle}>
+        <div style={cardStyle}>
+          <h2 style={headingStyle}>{isFree ? '🎁 Free Report' : 'Payment Successful!'}</h2>
+
+          {/* Warning icon */}
+          <div style={{ margin: '24px auto 0', animation: 'bw-pulse-scale 2s ease-in-out infinite', display: 'inline-block' }}>
+            <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+              <line x1="12" y1="9" x2="12" y2="13"/>
+              <line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+          </div>
+
+          <p style={subHeadingStyle}>Generation Hit a Snag</p>
+          <p style={bodyStyle}>
+            Our research engine encountered a temporary issue. Your order is safely saved and our team has been notified.
+            A completed report will appear in your dashboard within 24 hours.
+          </p>
+
+          <button
+            id="failed-goto-dashboard"
+            style={btnStyle}
+            onMouseEnter={e => (e.currentTarget.style.background = '#b8972e')}
+            onMouseLeave={e => (e.currentTarget.style.background = '#D4AF37')}
+            onClick={() => navigate('/dashboard')}
+          >
+            Go to My Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  /* ─── TIMEOUT STATE (≥ 90 s) ─── */
+  if (elapsedTime >= 90) {
+    return (
+      <div style={wrapStyle}>
+        <div style={cardStyle}>
+          <h2 style={headingStyle}>{isFree ? '🎁 Free Report' : 'Payment Successful!'}</h2>
+
+          {/* Clock icon */}
+          <div style={{ margin: '24px auto 0', animation: 'bw-pulse-scale 2.4s ease-in-out infinite', display: 'inline-block' }}>
+            <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#D4AF37" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <polyline points="12 6 12 12 16 14"/>
+            </svg>
+          </div>
+
+          <p style={subHeadingStyle}>Still Working in the Background</p>
+          <p style={bodyStyle}>
+            Our free-tier engines are warming up after a cold start. Your report is generating safely — you don't need to wait here.
+            It will be ready in your dashboard as soon as it completes.
+          </p>
+
+          <button
+            id="timeout-goto-dashboard"
+            style={btnStyle}
+            onMouseEnter={e => (e.currentTarget.style.background = '#b8972e')}
+            onMouseLeave={e => (e.currentTarget.style.background = '#D4AF37')}
+            onClick={() => navigate('/dashboard')}
+          >
+            View My Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  /* ─── GENERATING / POLLING STATE ─── */
+  const statusLabel =
+    status === 'PENDING'
+      ? 'Confirming Payment…'
+      : status === 'PAID'
+      ? 'Preparing Research…'
+      : 'We are generating your report…';
+
+  const statusSub =
+    status === 'PENDING'
+      ? 'Waiting for final confirmation from Razorpay.'
+      : 'This typically takes 30–60 seconds. Please keep this page open.';
+
   return (
-    <div className="min-h-[calc(100vh-64px)] flex flex-col items-center justify-center p-4">
-      <div className="max-w-md w-full bg-zinc-900 border border-zinc-800 rounded-2xl p-10 text-center shadow-2xl">
-        <h2 className="text-3xl font-bold mb-4 text-[#D4AF37]">
-          {isFree ? '🎁 Free Report Claimed!' : 'Payment Successful!'}
-        </h2>
-        
-        {status === 'FAILED' ? (
-          <div className="mt-8">
-            <div className="text-red-500 mb-4">
-              <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-            </div>
-            <p className="text-xl font-semibold mb-2 text-white">Generation Encountered an Issue</p>
-            <p className="text-zinc-400 mb-4">Our AI engine hit a temporary snag. Don't worry — your order is saved and our team has been notified. A report will be delivered to your dashboard within 24 hours.</p>
-            <button onClick={() => navigate('/dashboard')} className="mt-4 bg-[#D4AF37] hover:bg-[#b8972e] text-black px-8 py-3 rounded-lg font-bold transition-colors">
-              Go to My Dashboard
-            </button>
-          </div>
-        ) : (
-          <div className="mt-8 flex flex-col items-center">
-            <Loader2 className="w-16 h-16 text-[#D4AF37] animate-spin mb-6" />
-            <p className="text-xl font-semibold mb-2 text-white">
-              {status === 'PENDING' ? 'Confirming Payment...' : 
-               status === 'PAID' ? 'Preparing Research...' : 
-               'We are generating your report...'}
-            </p>
-            <p className="text-zinc-400 max-w-xs mx-auto text-sm">
-              {status === 'PENDING' ? 'Waiting for final confirmation from Razorpay.' : 
-               'This typically takes 30-60 seconds. Please do not close this page.'}
-            </p>
-            
-            <div className="w-full bg-zinc-800 h-2 rounded-full mt-8 overflow-hidden">
-              <div className="bg-[#D4AF37] h-full rounded-full animate-pulse" style={{ width: '60%' }}></div>
-            </div>
-          </div>
-        )}
+    <div style={wrapStyle}>
+      <div style={cardStyle}>
+        <h2 style={headingStyle}>{isFree ? '🎁 Free Report Claimed!' : 'Payment Successful!'}</h2>
+
+        {/* Spinner */}
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: 28 }}>
+          <OrbitSpinner size={64} />
+        </div>
+
+        <p style={subHeadingStyle}>{statusLabel}</p>
+        <p style={bodyStyle}>{statusSub}</p>
+
+        {/* Looping shimmer bar + elapsed counter */}
+        <ShimmerBar />
+        <ElapsedLabel seconds={elapsedTime} />
       </div>
     </div>
   );
 };
 
 export default OrderProcessing;
-
