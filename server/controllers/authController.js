@@ -31,8 +31,8 @@ exports.register = async (req, res) => {
     const passwordHash = await bcrypt.hash(password, salt);
 
     const result = await db.query(
-      'INSERT INTO users (name, email, password_hash, phone_whatsapp) VALUES ($1, $2, $3, $4) RETURNING id, name, email, role',
-      [name, email, passwordHash, phone_whatsapp || null]
+      'INSERT INTO users (name, email, password_hash, phone_whatsapp, auth_provider) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, email, role',
+      [name, email, passwordHash, phone_whatsapp || null, 'email']
     );
 
     const user = result.rows[0];
@@ -53,13 +53,21 @@ exports.login = async (req, res) => {
     const result = await db.query('SELECT * FROM users WHERE email = $1', [email]);
     const user = result.rows[0];
 
-    if (!user || !user.password_hash) {
-      return res.status(400).json({ error: 'Invalid credentials' });
+    if (!user) {
+      return res.status(401).json({ error: 'No account found with this email address.' });
+    }
+
+    if (user.auth_provider === 'google') {
+      return res.status(403).json({ error: "This email is linked to a Google account. Please use 'Continue with Google' to sign in." });
+    }
+
+    if (!user.password_hash) {
+      return res.status(401).json({ error: 'No account found with this email address.' });
     }
 
     const isMatch = await bcrypt.compare(password, user.password_hash);
     if (!isMatch) {
-      return res.status(400).json({ error: 'Invalid credentials' });
+      return res.status(401).json({ error: "The password you entered is incorrect. Please try again." });
     }
 
     const token = generateToken(user);
@@ -96,10 +104,14 @@ exports.googleLogin = async (req, res) => {
     let user = result.rows[0];
     let isNewUser = false;
 
+    if (user && user.auth_provider === 'email') {
+      return res.status(403).json({ error: "This email is registered with email and password. Please sign in with your email instead." });
+    }
+
     if (!user) {
       const insertResult = await db.query(
-        'INSERT INTO users (name, email) VALUES ($1, $2) RETURNING id, name, email, role',
-        [name, email]
+        'INSERT INTO users (name, email, auth_provider) VALUES ($1, $2, $3) RETURNING id, name, email, role',
+        [name, email, 'google']
       );
       user = insertResult.rows[0];
       isNewUser = true;

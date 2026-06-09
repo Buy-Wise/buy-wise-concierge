@@ -46,7 +46,8 @@ const Register = () => {
 
       navigate('/dashboard');
     } catch (err) {
-      setError(err.message);
+      const errorMessage = err?.response?.data?.error || err.message || "Something went wrong. Please try again.";
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -76,7 +77,8 @@ const Register = () => {
       
       navigate('/dashboard');
     } catch (err) {
-      setError(err.message);
+      const errorMessage = err?.response?.data?.error || err.message || "Something went wrong. Please try again.";
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }

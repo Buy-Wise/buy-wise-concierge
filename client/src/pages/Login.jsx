@@ -10,6 +10,7 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const [infoMessage, setInfoMessage] = useState(location.state?.message || '');
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -39,7 +40,8 @@ const Login = () => {
         navigate(redirectPath);
       }
     } catch (err) {
-      setError(err.message);
+      const errorMessage = err?.response?.data?.error || err.message || "Something went wrong. Please try again.";
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -74,7 +76,8 @@ const Login = () => {
         navigate(redirectPath);
       }
     } catch (err) {
-      setError(err.message);
+      const errorMessage = err?.response?.data?.error || err.message || "Something went wrong. Please try again.";
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -91,6 +94,8 @@ const Login = () => {
           <h1 className="text-3xl font-bold tracking-tight">BUY<span className="text-[#D4AF37]">WISE</span></h1>
         </div>
 
+        {infoMessage && <div className="bg-blue-500/10 border border-blue-500/30 text-blue-400 text-sm p-3 rounded-lg mb-4 text-center">{infoMessage}</div>}
+
         {error && <div className="text-red-500 text-sm mb-4 text-center">{error}</div>}
 
         <form onSubmit={handleLogin} className="space-y-4">
@@ -100,7 +105,7 @@ const Login = () => {
               autoFocus
               required
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => { setEmail(e.target.value); if (infoMessage) setInfoMessage(''); }}
               placeholder="Email address"
               className="w-full bg-black border border-zinc-800 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-[#D4AF37] focus:ring-1 focus:ring-[#D4AF37] transition-colors"
             />
@@ -112,7 +117,7 @@ const Login = () => {
                 type={showPassword ? "text" : "password"}
                 required
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => { setPassword(e.target.value); if (infoMessage) setInfoMessage(''); }}
                 placeholder="Password"
                 className="w-full bg-black border border-zinc-800 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-[#D4AF37] focus:ring-1 focus:ring-[#D4AF37] transition-colors pr-16"
               />

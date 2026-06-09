@@ -28,9 +28,15 @@ const Order = () => {
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const navigate = useNavigate();
 
+  const token = localStorage.getItem('token');
+  useEffect(() => {
+    if (!token) {
+      navigate('/login', { state: { message: 'Please log in to access your report.', redirectFrom: '/order' } });
+    }
+  }, [token, navigate]);
+
   // On mount: check if user is eligible for free report
   useEffect(() => {
-    const token = localStorage.getItem('token');
     if (!token) return;
     fetch(`${API_URL}/api/auth/me`, {
       headers: { 'Authorization': `Bearer ${token}` }
@@ -55,6 +61,10 @@ const Order = () => {
 
   // ── Task 1: Free Report Bypass flow ──────────────────────────────────────
   const handleClaimFree = async () => {
+    if (!localStorage.getItem('token')) {
+      navigate('/login', { state: { message: 'Please log in to access your report.', redirectFrom: '/order' } });
+      return;
+    }
     setIsProcessingPayment(true);
     setError('');
     const url = `${API_URL}/api/payments/claim-free`;
@@ -98,6 +108,10 @@ const Order = () => {
   });
 
   const handlePayment = async () => {
+    if (!localStorage.getItem('token')) {
+      navigate('/login', { state: { message: 'Please log in to access your report.', redirectFrom: '/order' } });
+      return;
+    }
     setIsProcessingPayment(true);
     setError('');
     try {
@@ -177,6 +191,8 @@ const Order = () => {
   // ── Derived price values for the Summary UI ────────────────────────────
   const basePrice = tier === 'PRO' ? 249 : 149;
   const totalPrice = freeReportEligible ? 0 : basePrice;
+
+  if (!token) return null;
 
   return (
     <>

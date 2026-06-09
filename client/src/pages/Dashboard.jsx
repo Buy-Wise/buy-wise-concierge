@@ -18,7 +18,9 @@ const Dashboard = () => {
   const [deleteConfirmInput, setDeleteConfirmInput] = useState('');
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [toast, setToast] = useState(null); // { message, type }
-  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [showSuggestionModal, setShowSuggestionModal] = useState(false);
+  const [suggestionForm, setSuggestionForm] = useState({ product_name: '', product_url: '', category: '', notes: '' });
+  const [suggestionLoading, setSuggestionLoading] = useState(false);
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
@@ -238,6 +240,34 @@ const Dashboard = () => {
     }
   };
 
+  const submitSuggestion = async (e) => {
+    e.preventDefault();
+    if (!suggestionForm.product_name) return;
+    setSuggestionLoading(true);
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/suggestions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+        },
+        body: JSON.stringify(suggestionForm)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showToast("Product suggestion submitted successfully!");
+        setShowSuggestionModal(false);
+        setSuggestionForm({ product_name: '', product_url: '', category: '', notes: '' });
+      } else {
+        showToast(data.error || "Failed to submit suggestion", "error");
+      }
+    } catch (err) {
+      showToast("Connection error", "error");
+    } finally {
+      setSuggestionLoading(false);
+    }
+  };
+
   return (
     <>
       <div className="max-w-7xl mx-auto px-4 py-8 md:py-20 min-h-screen">
@@ -253,7 +283,7 @@ const Dashboard = () => {
         <button onClick={() => setActiveTab('profile')} className={`px-4 py-2 font-medium whitespace-nowrap rounded-lg flex items-center space-x-2 ${activeTab === 'profile' ? 'bg-[#D4AF37] text-black' : 'text-gray-400 hover:text-white'}`}>
           <User size={18} /><span>Profile</span>
         </button>
-        <button onClick={() => setShowFeedbackModal(true)} className="px-4 py-2 font-medium whitespace-nowrap rounded-lg flex items-center space-x-2 text-[#D4AF37] hover:text-white">
+        <button onClick={() => setShowSuggestionModal(true)} className="px-4 py-2 font-medium whitespace-nowrap rounded-lg flex items-center space-x-2 text-[#D4AF37] hover:text-white">
           <PlusCircle size={18} /><span>Suggest Category</span>
         </button>
       </div>
@@ -293,7 +323,7 @@ const Dashboard = () => {
                 <User size={20} /><span>Profile & Settings</span>
               </button>
               <button 
-                onClick={() => setShowFeedbackModal(true)} 
+                onClick={() => setShowSuggestionModal(true)} 
                 className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg font-medium transition-colors text-gray-400 hover:text-white hover:bg-white/5"
               >
                 <PlusCircle size={20} /><span>Suggest a Product</span>
@@ -603,6 +633,95 @@ const Dashboard = () => {
                 </button>
               </div>
             </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+
+    {/* Product Suggestion Modal */}
+    <AnimatePresence>
+      {showSuggestionModal && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm"
+        >
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.9, opacity: 0 }}
+            className="bg-[#111] border border-white/10 rounded-2xl w-full max-w-md p-8 shadow-2xl relative"
+          >
+            <button 
+              onClick={() => setShowSuggestionModal(false)}
+              className="absolute top-4 right-4 text-white/50 hover:text-white p-1"
+            >
+              <X size={20} />
+            </button>
+            <div className="flex items-center space-x-3 text-[#D4AF37] mb-2">
+              <PlusCircle size={24} />
+              <h2 className="text-xl font-bold">Suggest a Product</h2>
+            </div>
+            <p className="text-white/50 text-sm mb-6">Tell us what product or category you'd like us to add to Buy Wise.</p>
+            
+            <form onSubmit={submitSuggestion} className="space-y-4">
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Product Name *</label>
+                <input
+                  required
+                  type="text"
+                  value={suggestionForm.product_name}
+                  onChange={(e) => setSuggestionForm({...suggestionForm, product_name: e.target.value})}
+                  className="w-full bg-black border border-white/10 rounded-lg p-3 text-white focus:border-[#D4AF37] focus:outline-none"
+                  placeholder="e.g. Sony WH-1000XM5"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Product URL (Optional)</label>
+                <input
+                  type="text"
+                  value={suggestionForm.product_url}
+                  onChange={(e) => setSuggestionForm({...suggestionForm, product_url: e.target.value})}
+                  className="w-full bg-black border border-white/10 rounded-lg p-3 text-white focus:border-[#D4AF37] focus:outline-none"
+                  placeholder="https://..."
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Category (Optional)</label>
+                <select
+                  value={suggestionForm.category}
+                  onChange={(e) => setSuggestionForm({...suggestionForm, category: e.target.value})}
+                  className="w-full bg-black border border-white/10 rounded-lg p-3 text-white focus:border-[#D4AF37] focus:outline-none"
+                >
+                  <option value="">Select Category</option>
+                  <option value="Electronics">Electronics</option>
+                  <option value="Appliances">Appliances</option>
+                  <option value="Beauty & Personal Care">Beauty & Personal Care</option>
+                  <option value="Fashion & Apparel">Fashion & Apparel</option>
+                  <option value="Home & Kitchen">Home & Kitchen</option>
+                  <option value="Sports & Fitness">Sports & Fitness</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Notes (Optional)</label>
+                <textarea
+                  maxLength={500}
+                  value={suggestionForm.notes}
+                  onChange={(e) => setSuggestionForm({...suggestionForm, notes: e.target.value})}
+                  className="w-full bg-black border border-white/10 rounded-lg p-3 text-white focus:border-[#D4AF37] focus:outline-none h-24 resize-none"
+                  placeholder="Anything specific you'd like us to know?"
+                ></textarea>
+              </div>
+              <button
+                type="submit"
+                disabled={suggestionLoading}
+                className="w-full bg-[#D4AF37] text-black font-bold py-3 rounded-lg hover:bg-[#b8972e] disabled:opacity-50 transition-colors mt-2"
+              >
+                {suggestionLoading ? 'Submitting...' : 'Submit Suggestion'}
+              </button>
+            </form>
           </motion.div>
         </motion.div>
       )}

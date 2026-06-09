@@ -153,7 +153,7 @@ const downloadReport = async (req, res) => {
 
     const orderResult = await db.query('SELECT user_id FROM orders WHERE id = $1', [orderId]);
     if (orderResult.rows.length === 0 || orderResult.rows[0].user_id !== req.user.id) {
-      return res.status(403).json({ error: 'Unauthorized' });
+      return res.status(403).json({ error: 'You do not have permission to view this report.' });
     }
 
     const reportResult = await db.query('SELECT pdf_url FROM reports WHERE order_id = $1', [orderId]);

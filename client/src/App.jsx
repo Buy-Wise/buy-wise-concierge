@@ -14,12 +14,15 @@ import SampleReport from './pages/SampleReport';
 import { Contact, Privacy, Terms, FAQ } from './pages/StaticPages';
 import Login from './pages/Login';
 import Register from './pages/Register';
+
+import ScrollToTop from './components/ScrollToTop';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 
 function App() {
   return (
     <Router>
+      <ScrollToTop />
       <div className="min-h-screen bg-black text-white font-sans selection:bg-[#D4AF37] selection:text-black">
         <Navigation />
         <main className="pt-16">

@@ -78,9 +78,8 @@ const DealWatch = () => {
       </div>
 
       <div className="mt-12 bg-[#111] border border-[#D4AF37]/20 rounded-xl p-6 text-center">
-        <h3 className="font-bold text-[#D4AF37] mb-2">₹149 / month</h3>
-        <p className="text-gray-400 text-sm mb-4">Unlimited active price alerts across any product. Cancel anytime.</p>
-        <button className="bg-[#D4AF37] text-black px-8 py-2.5 rounded-lg font-bold hover:bg-[#b8972e]">Subscribe to Deal Watch</button>
+        <h3 className="font-bold text-[#D4AF37] mb-2">Free Feature</h3>
+        <p className="text-gray-400 text-sm mb-4">Unlimited active price alerts across any product. Completely free for all users.</p>
       </div>
     </div>
   );

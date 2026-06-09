@@ -169,13 +169,13 @@ function HeroGeometric({
                         initial="hidden"
                         animate="visible"
                     >
-                        <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold mb-6 md:mb-8 tracking-tight leading-tight md:leading-tight lg:leading-tight max-w-4xl mx-auto">
+                        <h1 className="text-3xl sm:text-4xl md:text-6xl lg:text-7xl font-extrabold mb-6 md:mb-8 tracking-tight leading-tight md:leading-tight lg:leading-tight max-w-4xl mx-auto">
                             <span className="bg-clip-text text-transparent bg-gradient-to-b from-white to-white/80">
                                 {title1}
                             </span>{' '}
                             <span
                                 className={cn(
-                                    "bg-clip-text text-transparent bg-gradient-to-r from-[#D4AF37] via-white/90 to-amber-200 "
+                                    "bg-clip-text text-transparent bg-gradient-to-r from-[#D4AF37] via-white/90 to-amber-200 block sm:inline"
                                 )}
                             >
                                 {title2}

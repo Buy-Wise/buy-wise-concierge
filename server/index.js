@@ -157,6 +157,7 @@ const feedbackRoutes = require('./routes/feedback');
 const adminRoutes = require('./routes/admin');
 const alertRoutes = require('./routes/alerts');
 const eventRoutes = require('./routes/events');
+const suggestionRoutes = require('./routes/suggestions');
 
 // Public health check and keep-alive endpoint for cron/n8n/uptime monitoring
 app.get('/api/health', async (req, res) => {
@@ -180,6 +181,7 @@ app.use('/api/feedback', feedbackRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/alerts', alertRoutes);
 app.use('/api/events', eventRoutes);
+app.use('/api/suggestions', suggestionRoutes);
 console.log('✅ All API Routes mounted.');
 
 // --- GLOBAL JSON ERROR HANDLERS ---

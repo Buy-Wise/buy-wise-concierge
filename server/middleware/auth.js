@@ -20,7 +20,7 @@ const verifyToken = (req, res, next) => {
   }
 
   return res.status(401).json({ 
-    error: 'Access denied. Invalid or missing token.', 
+    error: 'Authentication required. Please log in to continue.', 
     details: lastError?.message 
   });
 };
